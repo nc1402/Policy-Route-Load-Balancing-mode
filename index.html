@@ -1,433 +1,975 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DrayOS Policy Route – Tối ưu Multi-WAN theo từng loại Traffic</title>
-<meta name="description" content="Phân tích DrayOS Policy Route: tối ưu hiệu quả băng thông, ổn định phiên, kiểm soát Public IP, trải nghiệm ứng dụng và thiết kế Multi-WAN.">
-
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Policy Route Multi-WAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap&subset=vietnamese">
 <style>
+/* Layout: site 6 trang theo lộ trình học (Hiểu → Cấu hình → Tình huống → Thực hành → Sự cố). Mỗi trang một việc. Màu WAN cố định toàn site: WAN1 cobalt, WAN2 amber, WAN3 teal, WAN4 mận. */
 :root{
-    --navy:#14243a;--navy2:#1b2a4a;--orange:#f37021;
-    --orange-light:#ff9b5a;--bg:#f5f7fa;--card:#fff;
-    --text:#182230;--muted:#667085;--border:#e5e9ef;
-    --radius:18px;--shadow:0 12px 35px rgba(20,36,58,.08)
+  --paper:#eef1f4; --panel:#ffffff; --sunk:#f5f7f9; --ink:#101c27; --muted:#55626e; --line:#d3dae1; --grid:#e1e6eb;
+  --w1:#2453d4; --w1s:#e3eafc; --w2:#c27304; --w2s:#fbefd9; --w3:#0d7f7f; --w3s:#daf2f1; --w4:#a63a73; --w4s:#f8e2ee;
+  --ok:#1d7a4b; --oks:#dff2e8; --warn:#a85f06; --warns:#fcefd6; --bad:#b53a1d; --bads:#fbe4dd;
+  --display:"Be Vietnam Pro","Segoe UI",system-ui,sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --r:10px; --maxw:1140px;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text);background:var(--bg);line-height:1.65}
-a{color:inherit;text-decoration:none}
-.container{width:min(1180px,calc(100% - 40px));margin:auto}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0b131a; --panel:#121c26; --sunk:#0f1820; --ink:#e5ecf2; --muted:#9aa7b3; --line:#243240; --grid:#16212b;
+  --w1:#7397ff; --w1s:#172548; --w2:#f0a63a; --w2s:#38290f; --w3:#3cc4c2; --w3s:#0f3232; --w4:#e47ab2; --w4s:#3a1729;
+  --ok:#5cc792; --oks:#11301f; --warn:#f2b552; --warns:#352710; --bad:#ff8a6a; --bads:#3a1a12; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0b131a; --panel:#121c26; --sunk:#0f1820; --ink:#e5ecf2; --muted:#9aa7b3; --line:#243240; --grid:#16212b;
+  --w1:#7397ff; --w1s:#172548; --w2:#f0a63a; --w2s:#38290f; --w3:#3cc4c2; --w3s:#0f3232; --w4:#e47ab2; --w4s:#3a1729;
+  --ok:#5cc792; --oks:#11301f; --warn:#f2b552; --warns:#352710; --bad:#ff8a6a; --bads:#3a1a12; color-scheme:dark}
 
-/* BRAND */
-.brand-group{display:flex;align-items:center;gap:18px}
-.logo-ap{width:108px;height:58px;object-fit:contain;display:block}
-.logo-draytek{width:145px;height:auto;display:block}
-.brand-divider{width:1px;height:34px;background:#d7dce3}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:400 15.5px/1.62 var(--body);margin:0}
+.wrap{max-width:var(--maxw);margin:0 auto;padding-inline:20px}
+h1,h2,h3,h4{font-family:var(--display);margin:0;line-height:1.2;text-wrap:balance}
+h1{font-size:clamp(2rem,4.6vw,3.3rem);font-weight:800;letter-spacing:-.033em}
+h2{font-size:clamp(1.35rem,2.6vw,1.75rem);font-weight:800;letter-spacing:-.015em}
+h3{font-size:1.03rem;font-weight:700}
+p{margin:0}
+.lead{color:var(--muted);font-size:1.04rem;max-width:64ch}
+.muted{color:var(--muted)}
+.small{font-size:.86rem}
+.eyebrow{font:600 .72rem/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.86em}
+a{color:var(--w1)}
+:focus-visible{outline:2px solid var(--w1);outline-offset:2px;border-radius:4px}
+button{font:inherit;color:inherit}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
+textarea{width:100%;resize:vertical}
 
-/* HEADER */
-header{position:sticky;top:0;z-index:1000;background:rgba(255,255,255,.94);backdrop-filter:blur(16px);border-bottom:1px solid rgba(229,233,239,.8)}
-.nav{min-height:78px;display:flex;align-items:center;justify-content:space-between;gap:30px}
-.nav-links{display:flex;gap:25px;font-size:14px;font-weight:600;color:#475467}
-.nav-links a:hover{color:var(--orange)}
+.tag{display:inline-flex;align-items:center;gap:5px;font:600 .72rem/1 var(--mono);padding:5px 7px;border-radius:6px;white-space:nowrap}
+.wt1{background:var(--w1s);color:var(--w1)} .wt2{background:var(--w2s);color:var(--w2)} .wt3{background:var(--w3s);color:var(--w3)} .wt4{background:var(--w4s);color:var(--w4)}
+.tb{background:linear-gradient(90deg,var(--w1s),var(--w2s));color:var(--ink)}
+.tok{background:var(--oks);color:var(--ok)} .twarn{background:var(--warns);color:var(--warn)} .tbad{background:var(--bads);color:var(--bad)} .tn{background:var(--sunk);color:var(--muted);border:1px solid var(--line)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 15px;border-radius:9px;font-weight:600;font-size:.92rem;border:1px solid var(--line);background:var(--panel);cursor:pointer;text-decoration:none;color:var(--ink)}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.sm{padding:6px 10px;font-size:.82rem}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:grid;gap:12px;min-width:0}
+.box-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.scroll{overflow-x:auto}
 
-/* HERO */
-.hero{position:relative;overflow:hidden;padding:110px 0 100px;color:white;background:radial-gradient(circle at 85% 20%,rgba(243,112,33,.25),transparent 30%),radial-gradient(circle at 15% 80%,rgba(32,184,216,.18),transparent 30%),linear-gradient(135deg,#101d31,#1b2a4a 60%,#223c61)}
-.hero-content{max-width:850px}
-.eyebrow{display:inline-flex;padding:7px 14px;margin-bottom:22px;border:1px solid rgba(255,255,255,.2);border-radius:30px;background:rgba(255,255,255,.08);backdrop-filter:blur(10px);color:#dce8f7;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
-h1{font-size:clamp(38px,5vw,64px);line-height:1.08;letter-spacing:-.035em;margin-bottom:25px}
-h1 span{color:var(--orange-light)}
-.hero-description{max-width:760px;color:#d7e0eb;font-size:20px;line-height:1.7}
-.hero-buttons{display:flex;flex-wrap:wrap;gap:14px;margin-top:35px}
-.btn{display:inline-flex;align-items:center;justify-content:center;padding:13px 22px;border-radius:10px;font-weight:700;font-size:15px;transition:.2s ease}
-.btn-primary{color:white;background:var(--orange)}
-.btn-primary:hover{transform:translateY(-2px);background:#ff7e2d}
-.btn-secondary{color:white;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08)}
+/* glossary term */
+.term{border:0;background:none;padding:0;color:inherit;font:inherit;text-decoration:underline dotted var(--muted);text-underline-offset:3px;cursor:help}
+#tip{position:fixed;z-index:60;max-width:min(300px,calc(100vw - 32px));background:var(--ink);color:var(--paper);padding:10px 12px;border-radius:9px;font-size:.86rem;line-height:1.45;box-shadow:0 12px 30px -12px rgba(0,0,0,.5)}
+#tip b{display:block;font-family:var(--display);margin-bottom:2px}
 
-/* COMMON */
-section{padding:90px 0}
-.section-heading{max-width:780px;margin-bottom:45px}
-.section-label{margin-bottom:10px;color:var(--orange);font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
-h2{color:var(--navy);font-size:clamp(30px,4vw,44px);line-height:1.2;letter-spacing:-.025em;margin-bottom:16px}
-.section-heading p{color:var(--muted);font-size:17px}
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:color-mix(in srgb,var(--paper) 90%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:16px;min-height:54px}
+.brand{font:800 .95rem/1 var(--display);display:flex;gap:9px;align-items:center;white-space:nowrap;color:var(--ink);text-decoration:none}
+.brand i{width:18px;height:18px;border-radius:5px;background:conic-gradient(var(--w1) 0 50%,var(--w2) 0)}
+.nav ul{display:flex;gap:2px;margin:0 0 0 auto;padding:0;list-style:none;overflow-x:auto;scrollbar-width:none}
+.nav ul a{display:block;padding:7px 10px;border-radius:7px;color:var(--muted);text-decoration:none;font-size:.88rem;white-space:nowrap}
+.nav ul a:hover{background:var(--panel);color:var(--ink)}
+.nav ul a[aria-current="page"]{background:var(--ink);color:var(--paper)}
+@media (max-width:820px){.nav .wrap{flex-wrap:wrap;gap:0;padding-block:8px}.nav ul{margin:6px -4px 0;width:calc(100% + 8px)}}
 
-/* OVERVIEW */
-.problem-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
-.problem-card{padding:30px;background:white;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
-.problem-number{display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin-bottom:20px;border-radius:12px;color:white;background:var(--navy);font-weight:800}
-.problem-card h3{margin-bottom:10px;color:var(--navy);font-size:20px}
-.problem-card p{color:var(--muted)}
+/* view frame */
+.view{padding-block:36px 64px}
+.view>.wrap{display:grid;gap:36px}
+.vhead{display:grid;gap:12px}
+.part{display:grid;gap:16px}
+.part>.ph{display:grid;gap:8px}
+.next{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;background:var(--ink);color:var(--paper);border-radius:14px;padding:22px 24px;text-decoration:none}
+.next small{font:600 .72rem/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;opacity:.7}
+.next b{display:block;font:800 1.2rem/1.25 var(--display);margin-top:6px}
+.next span{opacity:.8;font-size:.92rem}
+.next i{font-style:normal;font:700 1.4rem/1 var(--mono)}
 
-/* ARCHITECTURE */
-.architecture{background:#eef2f7}
-.architecture-box{padding:45px;border-radius:24px;background:white;box-shadow:var(--shadow);border:1px solid var(--border)}
-.flow{display:grid;grid-template-columns:1fr 35px 1fr 35px 1fr 35px 1fr 35px 1fr;align-items:center;gap:12px}
-.flow-item{min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;border-radius:16px;border:1px solid var(--border);background:#fafbfc}
-.flow-item strong{color:var(--navy);margin-bottom:5px}
-.flow-item span{color:var(--muted);font-size:13px}
-.flow-arrow{color:var(--orange);font-size:25px;text-align:center}
+/* ===== HOME ===== */
+.hero{display:grid;grid-template-columns:1.05fr 1fr;gap:40px;align-items:center}
+.hero h1 em{font-style:normal;background:linear-gradient(90deg,var(--w1),var(--w2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .lead{margin-top:16px}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.facts span{font:500 .82rem/1.2 var(--mono);color:var(--muted);border:1px solid var(--line);background:var(--panel);padding:7px 10px;border-radius:8px}
+.facts b{color:var(--ink)}
+.flow{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:0;min-width:0;background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:12px 12px}
+.flow svg{width:100%;height:auto;display:block}
+.flow figcaption{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;font:500 .76rem/1.3 var(--mono);color:var(--muted)}
+.pkt{animation:move 3.2s linear infinite}
+@keyframes move{from{offset-distance:0%}to{offset-distance:100%}}
+@media (max-width:900px){.hero{grid-template-columns:1fr}}
+.path{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,1fr);gap:12px;counter-reset:p}
+.path li{counter-increment:p}
+.path a{display:grid;gap:6px;height:100%;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;text-decoration:none;color:var(--ink);align-content:start}
+.path a:hover{border-color:var(--ink)}
+.path a::before{content:counter(p);width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--paper);font:700 .82rem/1 var(--display)}
+.path b{font-family:var(--display)}
+.path small{color:var(--muted);font-size:.85rem}
+@media (max-width:980px){.path{grid-template-columns:1fr 1fr}}
+@media (max-width:440px){.path{grid-template-columns:1fr}}
+.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.quick a{display:block;padding:14px 16px;border:1px solid var(--line);border-radius:var(--r);background:var(--sunk);color:var(--ink);text-decoration:none;font-size:.92rem}
+.quick a:hover{border-color:var(--ink)}
+.quick a span{display:block;color:var(--muted);font-size:.82rem;margin-top:2px}
+@media (max-width:760px){.quick{grid-template-columns:1fr}}
 
-/* PILLARS */
-.pillar{padding:90px 0}
-.pillar:nth-child(even){background:#f9fafb}
-.pillar-grid{display:grid;grid-template-columns:110px 1fr;gap:35px;align-items:start}
-.pillar-number{width:90px;height:90px;display:flex;align-items:center;justify-content:center;border-radius:24px;color:white;background:linear-gradient(135deg,var(--navy),#294d79);font-size:30px;font-weight:800;box-shadow:0 15px 30px rgba(20,36,58,.18)}
-.pillar-intro{color:var(--muted);font-size:17px;margin-bottom:30px}
-.feature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
-.feature{padding:24px;border:1px solid var(--border);border-radius:16px;background:white}
-.feature h4{color:var(--navy);margin-bottom:8px}
-.feature p{color:var(--muted);font-size:15px}
+/* ===== CO CHE ===== */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:grid;gap:8px;align-content:start;min-width:0}
+.card p{color:var(--muted);font-size:.93rem}
+.myth{font-size:.85rem;color:var(--bad);text-decoration:line-through;text-decoration-thickness:1px}
+@media (max-width:860px){.grid3{grid-template-columns:1fr}}
+.order{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--panel)}
+.order>div{padding:20px;display:grid;gap:6px;align-content:start}
+.order>div+div{border-left:1px solid var(--line)}
+.order>div:nth-child(2){background:linear-gradient(180deg,var(--w1s),transparent)}
+.order p{color:var(--muted);font-size:.92rem}
+@media (max-width:760px){.order{grid-template-columns:1fr}.order>div+div{border-left:0;border-top:1px solid var(--line)}}
+.sim{display:grid;grid-template-columns:310px 1fr;gap:16px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--sunk);border:1px solid var(--line);border-radius:9px;padding:3px}
+.seg button{border:0;background:transparent;padding:10px 8px;border-radius:7px;font-weight:600;font-size:.9rem;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.wanrow{display:grid;gap:6px}
+.wanrow label{display:flex;justify-content:space-between;gap:8px;font-size:.84rem;color:var(--muted)}
+.wanrow input{width:100%;padding:0}
+#w1{accent-color:var(--w1)} #w2{accent-color:var(--w2)}
+.bars{display:grid;gap:10px}
+.bar{display:grid;grid-template-columns:64px 1fr 40px;align-items:center;gap:10px;font:600 .8rem/1 var(--mono)}
+.bar .track{height:12px;background:var(--sunk);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.bar .fill{height:100%;transition:width .45s ease}
+.sess{width:100%;border-collapse:collapse;font-size:.87rem;min-width:500px}
+.sess th{font:600 .7rem/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px;border-bottom:1px solid var(--line)}
+.sess td{padding:8px;border-bottom:1px solid var(--grid);font-variant-numeric:tabular-nums}
+.sess tr.new td{animation:flash .8s ease}
+@keyframes flash{from{background:var(--w1s)}to{background:transparent}}
+.verdicts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.verdict{border:1px solid var(--line);border-radius:9px;padding:11px;display:grid;gap:4px;font-size:.85rem;min-width:0}
+.verdict b{font-family:var(--display)}
+.verdict.bad{border-color:var(--bad);background:var(--bads)}
+.verdict.good{border-color:var(--ok);background:var(--oks)}
+@media (max-width:900px){.sim{grid-template-columns:1fr}.verdicts{grid-template-columns:1fr}}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+table.cmp{width:100%;border-collapse:collapse;min-width:600px}
+.cmp th,.cmp td{padding:13px 16px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;font-size:.92rem}
+.cmp thead th{font:700 .92rem/1.2 var(--display)}
+.cmp tbody th{font-weight:500;color:var(--muted);width:24%}
+.cmp tr:last-child>*{border-bottom:0}
+.c1{color:var(--w1)} .c2{color:var(--w2)}
 
-/* TABLE */
-.comparison{padding:90px 0}
-.comparison-table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;background:white;border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow)}
-.comparison-table th,.comparison-table td{padding:18px 20px;text-align:left;border-bottom:1px solid var(--border)}
-.comparison-table th{color:white;background:var(--navy)}
-.comparison-table tr:last-child td{border-bottom:none}
-.comparison-table td{color:#475467}
-.tag{display:inline-block;padding:4px 9px;border-radius:20px;font-size:12px;font-weight:700}
-.tag-ip{color:#175cd3;background:#eff8ff}
-.tag-session{color:#b54708;background:#fffaeb}
+/* ===== CAU HINH ===== */
+.wz{display:grid;grid-template-columns:390px 1fr;gap:18px;align-items:start}
+.wz-in,.wz-out{display:grid;gap:14px;min-width:0}
+.step{font:600 .7rem/1 var(--mono);color:var(--paper);background:var(--ink);border-radius:5px;padding:4px 6px;margin-right:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--sunk);border-radius:999px;padding:6px 11px;font-size:.84rem;cursor:pointer}
+.chip:hover{border-color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.wan,.wan-h{display:grid;grid-template-columns:58px 1fr 1fr 30px;gap:8px;align-items:center}
+.wan-h{font:600 .68rem/1 var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.wan input,.wan select{width:100%}
+.wan .x{border:0;background:transparent;cursor:pointer;color:var(--muted);font-size:1.1rem;padding:4px}
+.svc{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.svc label{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:.86rem;line-height:1.35;background:var(--sunk)}
+.svc label:has(input:checked){border-color:var(--ink);background:var(--panel)}
+.svc input{margin-top:2px;accent-color:var(--ink)}
+.custom{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.custom .full{grid-column:1/-1}
+.opt{display:flex;gap:10px;align-items:flex-start;font-size:.9rem}
+.opt input{margin-top:4px;accent-color:var(--ink)}
+@media (max-width:980px){.wz{grid-template-columns:1fr}}
+@media (max-width:440px){.svc,.custom{grid-template-columns:1fr}}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.sum{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:13px;display:grid;gap:4px}
+.sum b{font:800 1.45rem/1 var(--display);font-variant-numeric:tabular-nums}
+.sum span{font-size:.8rem;color:var(--muted)}
+@media (max-width:600px){.summary{grid-template-columns:1fr 1fr}}
+.warns{display:grid;gap:8px}
+.wn{display:grid;grid-template-columns:auto 1fr;gap:10px;padding:11px 13px;border-radius:9px;font-size:.9rem;align-items:start}
+.wn.w{background:var(--warns)} .wn.b{background:var(--bads)} .wn.g{background:var(--oks)}
+.stack{display:grid;gap:10px}
+.rule{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.rule-h{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:13px 16px;cursor:pointer;list-style:none}
+.rule-h::-webkit-details-marker{display:none}
+.prio{font:700 .8rem/1 var(--mono);background:var(--ink);color:var(--paper);border-radius:6px;padding:6px 7px}
+.rule-h h4{font-size:.97rem}
+.rule-h small{display:block;color:var(--muted);font-size:.82rem;margin-top:2px}
+.pills{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:520px){.rule-h{grid-template-columns:auto 1fr}.pills{grid-column:1/-1;justify-content:flex-start}}
+.rule-b{border-top:1px solid var(--line);padding:14px 16px;display:grid;gap:12px;background:var(--sunk)}
+.fields{width:100%;border-collapse:collapse;font-size:.88rem}
+.fields th{width:36%;text-align:left;font:500 .78rem/1.5 var(--mono);color:var(--muted);padding:6px 10px 6px 0;vertical-align:top}
+.fields td{padding:6px 0;vertical-align:top}
+.fields tr+tr>*{border-top:1px dashed var(--line)}
+.default{border-style:dashed}
+.howto{display:grid;gap:10px;counter-reset:h;list-style:none;margin:0;padding:0}
+.howto li{counter-increment:h;display:grid;grid-template-columns:28px 1fr;gap:10px;font-size:.92rem}
+.howto li::before{content:counter(h);width:24px;height:24px;border-radius:50%;background:var(--sunk);border:1px solid var(--line);display:grid;place-items:center;font:700 .74rem/1 var(--mono)}
+.toast{font-size:.84rem;color:var(--ok)}
+.plugs{display:flex;flex-wrap:wrap;gap:8px}
+.plug{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:9px 12px;cursor:pointer;font:600 .86rem/1 var(--mono)}
+.plug i{width:10px;height:10px;border-radius:50%;background:var(--ok)}
+.plug[aria-pressed="true"]{background:var(--bads);border-color:var(--bad);color:var(--bad)}
+.plug[aria-pressed="true"] i{background:var(--bad)}
+.drill-t{width:100%;border-collapse:collapse;font-size:.9rem;min-width:560px}
+.drill-t th{text-align:left;font:600 .7rem/1 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line)}
+.drill-t td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.drill-t tr:last-child td{border-bottom:0}
 
-/* MATRIX */
-.matrix{background:var(--navy);color:white}
-.matrix h2{color:white}
-.matrix .section-heading p{color:#b9c6d6}
-.matrix-table-wrapper{overflow-x:auto}
-.matrix-table{width:100%;min-width:850px;border-collapse:collapse;background:rgba(255,255,255,.06);border-radius:18px;overflow:hidden}
-.matrix-table th,.matrix-table td{padding:17px;border:1px solid rgba(255,255,255,.1);text-align:left}
-.matrix-table th{background:rgba(255,255,255,.1)}
-.matrix-table td{color:#d5deea}
+/* ===== TINH HUONG ===== */
+.cases{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.case{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:grid;gap:12px;align-content:start}
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ba div{padding:12px;border-radius:8px;font-size:.88rem;display:grid;gap:4px;align-content:start}
+.ba .b4{background:var(--bads)} .ba .af{background:var(--oks)}
+.ba b{font:600 .7rem/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+@media (max-width:820px){.cases{grid-template-columns:1fr}}
+@media (max-width:420px){.ba{grid-template-columns:1fr}}
+.matrix{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;align-items:start}
+.mx-list{display:grid;gap:8px}
+.mx{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;text-align:left;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px 14px;cursor:pointer}
+.mx:hover{border-color:var(--muted)}
+.mx[aria-selected="true"]{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--ink)}
+.mx strong{font-weight:600}
+.mx-detail{position:sticky;top:76px}
+.mx-detail dl{display:grid;grid-template-columns:100px 1fr;gap:8px 14px;margin:0;font-size:.92rem}
+.mx-detail dt{color:var(--muted);font:500 .78rem/1.7 var(--mono)}
+.mx-detail dd{margin:0}
+.risk{background:var(--bads);border-radius:8px;padding:12px 14px;font-size:.9rem}
+.risk b{color:var(--bad)}
+@media (max-width:900px){.matrix{grid-template-columns:1fr}.mx-detail{position:static}}
+@media (max-width:480px){.mx{grid-template-columns:1fr}.mx-detail dl{grid-template-columns:1fr}}
 
-/* TROUBLESHOOTING */
-.troubleshooting{background:white}
-.debug-flow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;padding:35px;border-radius:20px;background:#f6f8fb;border:1px solid var(--border)}
-.debug-step{padding:13px 17px;border-radius:10px;background:white;border:1px solid var(--border);color:var(--navy);font-weight:700;box-shadow:0 5px 15px rgba(0,0,0,.04)}
-.debug-arrow{color:var(--orange);font-size:20px}
+/* ===== THUC HANH ===== */
+.lab-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+@media (max-width:980px){.lab-grid{grid-template-columns:1fr}}
+.goal{padding:12px 14px;border-radius:9px;background:var(--sunk);border:1px solid var(--line);font-size:.9rem}
+.rlist{display:grid;gap:6px}
+.rrow{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--sunk);font-size:.88rem}
+.rrow.hit{border-color:var(--w1);background:var(--w1s)}
+.rrow .id{font:700 .8rem/1 var(--mono)}
+.rrow .mv{display:flex;gap:4px}
+.rrow .mv button{border:1px solid var(--line);background:var(--panel);border-radius:6px;width:30px;height:30px;cursor:pointer}
+.pk{width:100%;border-collapse:collapse;font-size:.88rem;min-width:500px}
+.pk th{text-align:left;font:600 .7rem/1 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px;border-bottom:1px solid var(--line)}
+.pk td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.pk select{width:100%;font-size:.85rem;padding:6px}
+.qbar{height:8px;background:var(--sunk);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.qbar i{display:block;height:100%;background:var(--ink);transition:width .3s}
+.qcase{font:600 1.05rem/1.45 var(--display)}
+.qopts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qopt{text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:var(--sunk);cursor:pointer;font-size:.92rem}
+.qopt:hover:not(:disabled){border-color:var(--ink)}
+.qopt.right{border-color:var(--ok);background:var(--oks)}
+.qopt.wrong{border-color:var(--bad);background:var(--bads)}
+.qopt:disabled{cursor:default}
+.qfb{padding:12px 14px;border-radius:9px;font-size:.92rem}
+.qfb.ok{background:var(--oks)} .qfb.no{background:var(--bads)}
+@media (max-width:480px){.qopts{grid-template-columns:1fr}}
 
-/* CONCLUSION */
-.conclusion{padding:100px 0;background:radial-gradient(circle at 80% 20%,rgba(243,112,33,.16),transparent 30%),var(--navy);color:white}
-.conclusion-box{max-width:900px}
-.conclusion h2{color:white}
-.conclusion p{color:#c8d3e0;font-size:18px}
-.conclusion-highlight{margin-top:30px;padding:25px;border-left:4px solid var(--orange);background:rgba(255,255,255,.06);border-radius:0 14px 14px 0;font-size:21px;font-weight:700}
+/* ===== SU CO ===== */
+.ts{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.track-steps{display:grid;border-left:2px solid var(--line);margin-left:8px}
+.track-steps button{all:unset;cursor:pointer;display:grid;gap:3px;padding:9px 0 9px 22px;position:relative}
+.track-steps button::before{content:"";position:absolute;left:-7px;top:15px;width:12px;height:12px;border-radius:50%;background:var(--paper);border:2px solid var(--line)}
+.track-steps button[aria-current="step"]::before{background:var(--w1);border-color:var(--w1)}
+.track-steps button:focus-visible{outline:2px solid var(--w1)}
+.track-steps b{font:600 .88rem/1.2 var(--mono)}
+.track-steps span{color:var(--muted);font-size:.85rem}
+.ts-panel{position:sticky;top:76px}
+.ts-panel ul{margin:0;padding-left:18px;display:grid;gap:6px;color:var(--muted);font-size:.93rem}
+@media (max-width:860px){.ts{grid-template-columns:1fr}.ts-panel{position:static}}
+.faq{display:grid;gap:8px;max-width:820px}
+.faq details{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:0 18px}
+.faq summary{cursor:pointer;padding:15px 0;font:600 .98rem/1.4 var(--display);list-style:none;display:flex;justify-content:space-between;gap:16px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font:400 1.3rem/1 var(--mono);color:var(--muted)}
+.faq details[open] summary::after{content:"–"}
+.faq details p{padding-bottom:16px;color:var(--muted)}
 
-/* FOOTER */
-footer{padding:35px 0;color:#98a2b3;background:#0d1726;font-size:14px}
-.footer-inner{display:flex;align-items:center;justify-content:space-between;gap:25px;flex-wrap:wrap}
-.footer-brand{color:white;font-weight:800}
-.footer-logos{display:flex;align-items:center;gap:18px}
-.footer-logos .logo-ap{width:90px;height:48px}
-.footer-logos .logo-draytek{width:125px}
+/* reactions */
+.react{display:grid;gap:10px;padding:14px 16px;border:1px dashed var(--line);border-radius:var(--r)}
+.react .row>span{font-size:.88rem;color:var(--muted);margin-right:4px}
+.rb{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:.85rem;cursor:pointer}
+.rb b{font:600 .78rem/1 var(--mono);color:var(--muted)}
+.rb[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.rb[aria-pressed="true"] b{color:var(--paper)}
+.rb:disabled{cursor:not-allowed;opacity:.6}
+.react small{font-size:.8rem;color:var(--muted)}
+.react details summary{cursor:pointer;font-size:.86rem;font-weight:600}
+.notes{display:grid;gap:8px}
+.note{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px 14px;display:grid;gap:4px;font-size:.92rem}
+.note small{color:var(--muted);font:500 .74rem/1 var(--mono)}
 
-/* RESPONSIVE */
-@media(max-width:900px){
-    .nav-links{display:none}
-    .problem-grid{grid-template-columns:1fr}
-    .flow{grid-template-columns:1fr}
-    .flow-arrow{transform:rotate(90deg)}
-    .pillar-grid{grid-template-columns:1fr}
-    .feature-grid{grid-template-columns:1fr}
-}
-@media(max-width:600px){
-    .container{width:min(100% - 28px,1180px)}
-    section{padding:65px 0}
-    .hero{padding:80px 0}
-    .hero-description{font-size:17px}
-    .architecture-box{padding:25px}
-    .pillar-number{width:70px;height:70px;font-size:24px}
-    .comparison-table{min-width:700px}
-    .brand-group{gap:10px}
-    .logo-ap{width:82px;height:48px}
-    .logo-draytek{width:115px}
-    .brand-divider{height:28px}
-}
+footer{padding-block:28px;font-size:.84rem;color:var(--muted);border-top:1px solid var(--line)}
+footer .wrap{display:grid;gap:8px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
-</head>
 
-<body>
+<nav class="nav" aria-label="Các trang">
+  <div class="wrap">
+    <a class="brand" href="#trang-chu"><i aria-hidden="true"></i>Policy Route · Multi-WAN</a>
+    <ul id="navList">
+      <li><a href="#trang-chu">Trang chủ</a></li>
+      <li><a href="#co-che">1 · Hiểu cơ chế</a></li>
+      <li><a href="#cau-hinh">2 · Cấu hình</a></li>
+      <li><a href="#tinh-huong">3 · Tình huống</a></li>
+      <li><a href="#thuc-hanh">4 · Thực hành</a></li>
+      <li><a href="#su-co">5 · Sự cố</a></li>
+    </ul>
+  </div>
+</nav>
+<div id="tip" role="tooltip" hidden></div>
 
-<header>
-    <div class="container nav">
-        <div class="brand-group">
-            <img class="logo-ap"
-                 src="data:image/png;base64,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"
-                 alt="AN PHÁT">
-            <div class="brand-divider"></div>
-            <img class="logo-draytek"
-                 src="https://upload.wikimedia.org/wikipedia/commons/f/fc/Logo_of_DrayTek.svg"
-                 alt="DrayTek">
+<main>
+<!-- ================= HOME ================= -->
+<section class="view" data-view="trang-chu">
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <div class="eyebrow">DrayOS · Policy Route · Multi-WAN</div>
+        <h1 style="margin-top:14px">Hai đường Internet.<br><em>Mỗi loại traffic một lối đi riêng.</em></h1>
+        <p class="lead">Load Balance chia đều mọi thứ. <button type="button" class="term" data-t="policy">Policy Route</button> cho bạn quyết định ngân hàng đi đường nào, video dùng mấy <button type="button" class="term" data-t="wan">WAN</button>, server giữ <button type="button" class="term" data-t="ip">Public IP</button> nào, và chuyện gì xảy ra khi một đường rớt.</p>
+        <div class="facts" aria-label="Ba điều cần nhớ">
+          <span><b>1 kết nối</b> = 1 WAN</span>
+          <span><b>Firewall</b> &gt; Policy Route &gt; mặc định</span>
+          <span><b>Failover</b> = đổi Public IP</span>
         </div>
-
-        <nav class="nav-links">
-            <a href="#tong-quan">Tổng quan</a>
-            <a href="#mo-hinh">Mô hình</a>
-            <a href="#5-gia-tri">5 hướng phân tích</a>
-            <a href="#traffic-matrix">Traffic Matrix</a>
-            <a href="#troubleshooting">Troubleshooting</a>
-        </nav>
-    </div>
-</header>
-
-<section class="hero">
-    <div class="container">
-        <div class="hero-content">
-            <div class="eyebrow">DrayOS 5 · Policy Route · Multi-WAN</div>
-            <h1>2 WAN không chỉ để <span>Load Balance</span></h1>
-            <p class="hero-description">
-                Policy Route cho phép thiết kế cách từng loại traffic sử dụng
-                tài nguyên WAN: đi WAN nào, sử dụng một hay nhiều WAN,
-                phân bổ theo IP hay Session, sử dụng Public IP nào và
-                xử lý như thế nào khi đường truyền gặp sự cố.
-            </p>
-            <div class="hero-buttons">
-                <a href="#5-gia-tri" class="btn btn-primary">Khám phá 5 hướng phân tích</a>
-                <a href="#mo-hinh" class="btn btn-secondary">Xem mô hình</a>
-            </div>
+        <div class="row" style="margin-top:24px">
+          <a class="btn primary" href="#co-che">Bắt đầu từ đầu →</a>
+          <a class="btn" href="#cau-hinh">Tôi muốn cấu hình ngay</a>
         </div>
+      </div>
+      <figure class="flow">
+        <svg viewBox="0 0 480 300" role="img" aria-labelledby="flowT">
+          <title id="flowT">Traffic từ LAN đi qua Policy Route, được đưa vào WAN1, WAN2 hoặc cả hai</title>
+          <path d="M70 70 C150 70 150 150 230 150 C320 150 330 70 410 70" fill="none" stroke="var(--w1)" stroke-width="2" stroke-dasharray="4 5" opacity=".55"/>
+          <path d="M70 150 C150 150 150 150 230 150 C320 150 330 230 410 230" fill="none" stroke="var(--w2)" stroke-width="2" stroke-dasharray="4 5" opacity=".55"/>
+          <path d="M70 230 C150 230 150 150 230 150 C320 150 330 70 410 70" fill="none" stroke="var(--w1)" stroke-width="2" stroke-dasharray="4 5" opacity=".35"/>
+          <g font-family="JetBrains Mono, monospace" font-size="11" font-weight="600">
+            <rect x="14" y="54" width="62" height="32" rx="7" fill="var(--panel)" stroke="var(--line)"/><text x="45" y="74" text-anchor="middle" fill="var(--ink)">Bank</text>
+            <rect x="14" y="134" width="62" height="32" rx="7" fill="var(--panel)" stroke="var(--line)"/><text x="45" y="154" text-anchor="middle" fill="var(--ink)">Video</text>
+            <rect x="14" y="214" width="62" height="32" rx="7" fill="var(--panel)" stroke="var(--line)"/><text x="45" y="234" text-anchor="middle" fill="var(--ink)">Server</text>
+            <rect x="182" y="118" width="96" height="64" rx="12" fill="var(--ink)"/>
+            <text x="230" y="146" text-anchor="middle" fill="var(--paper)">Policy</text><text x="230" y="162" text-anchor="middle" fill="var(--paper)">Route</text>
+            <rect x="400" y="50" width="70" height="40" rx="8" fill="var(--w1s)" stroke="var(--w1)"/><text x="435" y="68" text-anchor="middle" fill="var(--w1)">WAN1</text><text x="435" y="82" text-anchor="middle" fill="var(--w1)" font-size="9" font-weight="400">300 Mbps</text>
+            <rect x="400" y="210" width="70" height="40" rx="8" fill="var(--w2s)" stroke="var(--w2)"/><text x="435" y="228" text-anchor="middle" fill="var(--w2)">WAN2</text><text x="435" y="242" text-anchor="middle" fill="var(--w2)" font-size="9" font-weight="400">100 Mbps</text>
+          </g>
+          <circle r="5" fill="var(--w1)" class="pkt" style="offset-path:path('M70 70 C150 70 150 150 230 150 C320 150 330 70 410 70')"/>
+          <circle r="5" fill="var(--w2)" class="pkt" style="offset-path:path('M70 150 C150 150 150 150 230 150 C320 150 330 230 410 230');animation-delay:-1s"/>
+          <circle r="5" fill="var(--w1)" class="pkt" style="offset-path:path('M70 150 C150 150 150 150 230 150 C320 150 330 70 410 70');animation-delay:-2.2s"/>
+          <circle r="5" fill="var(--w1)" class="pkt" style="offset-path:path('M70 230 C150 230 150 150 230 150 C320 150 330 70 410 70');animation-delay:-.4s"/>
+        </svg>
+        <figcaption><span>Bank → 2 WAN · IP-Based</span><span>Video → 2 WAN · Session-Based</span><span>Server → chỉ WAN1</span></figcaption>
+      </figure>
     </div>
+
+    <div class="part">
+      <div class="ph"><div class="eyebrow">Lộ trình</div><h2>Năm bước, mỗi bước một trang ngắn</h2></div>
+      <ol class="path">
+        <li><a href="#co-che"><b>Hiểu cơ chế</b><small>Vì sao 2 WAN không cộng băng thông cho 1 file. Mô phỏng IP-Based và Session-Based.</small></a></li>
+        <li><a href="#cau-hinh"><b>Cấu hình</b><small>Nhập WAN và dịch vụ của bạn, nhận danh sách rule và cách làm trên WebUI.</small></a></li>
+        <li><a href="#tinh-huong"><b>Tình huống mẫu</b><small>Bốn doanh nghiệp thường gặp và cách xử lý từng nhóm traffic.</small></a></li>
+        <li><a href="#thuc-hanh"><b>Thực hành</b><small>Sắp xếp rule, đoán đường đi gói tin, 8 câu tình huống có chấm điểm.</small></a></li>
+        <li><a href="#su-co"><b>Xử lý sự cố</b><small>Lần theo 8 bước từ "mạng chậm" đến nguyên nhân cụ thể.</small></a></li>
+      </ol>
+    </div>
+
+    <div class="part">
+      <div class="ph"><div class="eyebrow">Đang gặp vấn đề?</div><h2>Đi thẳng tới câu trả lời</h2></div>
+      <div class="quick">
+        <a href="#su-co">Ngân hàng, cổng thuế bị đăng xuất liên tục<span>Xem bảng triệu chứng →</span></a>
+        <a href="#co-che">Có 2 đường mà speedtest chỉ ra tốc độ 1 đường<span>Thử mô phỏng →</span></a>
+        <a href="#tinh-huong">Wi-Fi khách làm nhân viên bị chậm<span>Xem tình huống mẫu →</span></a>
+      </div>
+    </div>
+
+    <div class="part">
+      <div class="ph"><div class="eyebrow">Góp ý từ người dùng</div><h2>Mọi người nói gì về trang này</h2></div>
+      <div class="notes" id="notes"><p class="muted">Chưa có góp ý nào. Bạn có thể gửi góp ý ở cuối bất kỳ trang nào.</p></div>
+    </div>
+  </div>
 </section>
 
-<section id="tong-quan">
-    <div class="container">
-        <div class="section-heading">
-            <div class="section-label">Tư duy thiết kế</div>
-            <h2>Từ Load Balance sang Traffic Engineering</h2>
-            <p>
-                Multi-WAN hiệu quả không nhất thiết là chia đều traffic
-                giữa các đường truyền. Vấn đề quan trọng hơn là xác định
-                loại traffic nào cần sự ổn định, loại nào cần tận dụng
-                nhiều WAN và loại nào cần kiểm soát Public IP.
-            </p>
-        </div>
-
-        <div class="problem-grid">
-            <div class="problem-card"><div class="problem-number">01</div><h3>Hiệu quả băng thông</h3><p>Phân bổ traffic có nhiều session sang nhiều WAN để tận dụng tổng tài nguyên đường truyền.</p></div>
-            <div class="problem-card"><div class="problem-number">02</div><h3>Ổn định phiên</h3><p>Các dịch vụ nhạy cảm với Public IP có thể ưu tiên IP-Based để duy trì đường đi ổn định.</p></div>
-            <div class="problem-card"><div class="problem-number">03</div><h3>Kiểm soát Public IP</h3><p>Server, VoIP, API hoặc hệ thống cần whitelist có thể được ghim vào WAN phù hợp.</p></div>
-            <div class="problem-card"><div class="problem-number">04</div><h3>Trải nghiệm ứng dụng</h3><p>Mỗi Application, Domain, Country hoặc nhóm người dùng có thể có một chiến lược WAN riêng.</p></div>
-            <div class="problem-card"><div class="problem-number">05</div><h3>Troubleshooting</h3><p>Có thể lần theo traffic từ Source đến Policy, Pool, Mode và WAN thực tế để xác định nguyên nhân.</p></div>
-        </div>
+<!-- ================= 1. CO CHE ================= -->
+<section class="view" data-view="co-che" hidden>
+  <div class="wrap">
+    <div class="vhead">
+      <div class="eyebrow">Bước 1/5 · Hiểu cơ chế</div>
+      <h1>Load Balance không phải là cộng băng thông</h1>
+      <p class="lead">Ba hiểu lầm phổ biến, thứ tự router ra quyết định, và một mô phỏng để thấy tận mắt cách <button type="button" class="term" data-t="session">session</button> được chia.</p>
     </div>
+
+    <div class="grid3">
+      <article class="card"><span class="myth">“2 đường 100 Mbps = tải file 200 Mbps”</span><h3>Một kết nối chỉ đi trên một WAN</h3><p>Router gán WAN cho từng session khi session bắt đầu, không chia nhỏ từng gói. Một luồng tải đơn lẻ luôn bị giới hạn bởi tốc độ của WAN nó đang đi.</p></article>
+      <article class="card"><span class="myth">“Bật Load Balance là xong”</span><h3>Chỉ nhiều session mới dùng được nhiều WAN</h3><p>Download đa luồng, cloud sync, backup, video tạo nhiều session nên trải ra được nhiều WAN. Lợi ích đến từ số lượng session.</p></article>
+      <article class="card"><span class="myth">“Chia đều session là chia đều tải”</span><h3>Số session không phản ánh dung lượng</h3><p>Một session backup có thể nặng hơn cả nghìn session lướt web. Phân luồng theo loại traffic mới kiểm soát được tải thực tế.</p></article>
+    </div>
+
+    <div class="part">
+      <div class="ph"><h2>Ai được quyết định trước?</h2><p class="lead">Hiểu thứ tự này giúp giải thích vì sao một rule mới tạo “không ăn”.</p></div>
+      <div class="order">
+        <div><span class="eyebrow">Xét đầu tiên</span><h3>Firewall</h3><p>Traffic bị chặn hoặc bị ép hướng ở Firewall sẽ không tới Policy Route.</p></div>
+        <div><span class="eyebrow">Nơi bạn thiết kế</span><h3>Policy Route</h3><p>So khớp theo nguồn, đích, cổng, domain, quốc gia, ứng dụng. Rule cụ thể đặt trên, rule tổng quát đặt dưới.</p></div>
+        <div><span class="eyebrow">Còn lại</span><h3>Default route / Load Balance pool</h3><p>Traffic không khớp rule nào đi theo pool WAN mặc định.</p></div>
+      </div>
+    </div>
+
+    <div class="part">
+      <div class="ph"><h2>Mô phỏng: session được chia thế nào?</h2><p class="lead">Hai máy mở kết nối tới ngân hàng, YouTube và Google Drive. Đổi chế độ, kéo tốc độ WAN, tạo thêm session và xem Public IP mà mỗi dịch vụ nhìn thấy.</p></div>
+      <div class="sim">
+        <div class="box" style="align-content:start">
+          <div class="seg" role="group" aria-label="Chế độ phân bổ">
+            <button type="button" id="mIP" aria-pressed="true">IP-Based</button>
+            <button type="button" id="mSS" aria-pressed="false">Session-Based</button>
+          </div>
+          <div class="wanrow"><label for="w1"><span><span class="tag wt1">WAN1</span> 203.0.113.10</span><b id="w1v">300 Mbps</b></label><input type="range" id="w1" min="50" max="1000" step="50" value="300"></div>
+          <div class="wanrow"><label for="w2"><span><span class="tag wt2">WAN2</span> 198.51.100.20</span><b id="w2v">100 Mbps</b></label><input type="range" id="w2" min="50" max="1000" step="50" value="100"></div>
+          <div class="row"><button type="button" class="btn primary" id="simAdd">+ Tạo 6 session</button><button type="button" class="btn" id="simReset">Làm lại</button></div>
+          <p class="muted small" id="modeNote" style="border-top:1px dashed var(--line);padding-top:12px"></p>
+        </div>
+        <div class="box">
+          <div class="bars" aria-live="polite">
+            <div class="bar"><span class="tag wt1">WAN1</span><div class="track"><div class="fill" id="b1" style="background:var(--w1);width:0"></div></div><span id="c1">0</span></div>
+            <div class="bar"><span class="tag wt2">WAN2</span><div class="track"><div class="fill" id="b2" style="background:var(--w2);width:0"></div></div><span id="c2">0</span></div>
+          </div>
+          <div class="verdicts" id="verdicts"></div>
+          <div class="scroll"><table class="sess"><thead><tr><th>#</th><th>Nguồn</th><th>Đích</th><th>WAN</th><th>Public IP dịch vụ thấy</th></tr></thead><tbody id="simRows"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="part">
+      <div class="ph"><h2>IP-Based hay Session-Based?</h2></div>
+      <div class="tbl-wrap"><table class="cmp">
+        <thead><tr><th scope="col">Tiêu chí</th><th scope="col" class="c1">IP-Based</th><th scope="col" class="c2">Session-Based</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Cách chọn WAN</th><td>Cùng cặp IP nguồn và IP đích luôn đi chung một WAN</td><td>Mỗi session mới có thể sang WAN khác, kể cả tới cùng một đích</td></tr>
+          <tr><th scope="row">Public IP phía đích thấy</th><td>Ổn định, một IP</td><td>Có thể thay đổi giữa các session</td></tr>
+          <tr><th scope="row">Tốc độ tối đa tới một đích</th><td>Bằng tốc độ một WAN</td><td>Tiệm cận tổng các WAN, nếu ứng dụng mở nhiều session</td></tr>
+          <tr><th scope="row">Rủi ro</th><td>Một máy tải nặng có thể dồn hết vào một WAN</td><td>Website kiểm tra IP có thể đăng xuất, bắt xác thực lại</td></tr>
+          <tr><th scope="row">Phù hợp</th><td>Ngân hàng, ERP, cổng thuế, SSH, họp trực tuyến</td><td>Download, video, cloud backup, cập nhật phần mềm</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <a class="next" href="#cau-hinh"><div><small>Bước tiếp theo</small><b>Cấu hình cho mạng của bạn</b><span>Nhập WAN và dịch vụ, nhận danh sách rule.</span></div><i>→</i></a>
+    <div class="react" data-sec="co-che"></div>
+  </div>
 </section>
 
-<section class="architecture" id="mo-hinh">
-    <div class="container">
-        <div class="section-heading">
-            <div class="section-label">Architecture</div>
-            <h2>Một Policy Route là một quyết định về Traffic</h2>
-            <p>
-                Mỗi Policy Route có thể được thiết kế với tập WAN,
-                phương thức phân bổ và yêu cầu riêng.
-            </p>
-        </div>
-
-        <div class="architecture-box">
-            <div class="flow">
-                <div class="flow-item"><strong>Traffic</strong><span>Source / Destination</span></div>
-                <div class="flow-arrow">→</div>
-                <div class="flow-item"><strong>Policy Route</strong><span>App / Domain / IP / Country</span></div>
-                <div class="flow-arrow">→</div>
-                <div class="flow-item"><strong>WAN Pool</strong><span>WAN1 / WAN2 / ...</span></div>
-                <div class="flow-arrow">→</div>
-                <div class="flow-item"><strong>Mode</strong><span>IP-Based / Session-Based</span></div>
-                <div class="flow-arrow">→</div>
-                <div class="flow-item"><strong>Actual WAN</strong><span>Public IP / Path</span></div>
-            </div>
-        </div>
+<!-- ================= 2. CAU HINH ================= -->
+<section class="view" data-view="cau-hinh" hidden>
+  <div class="wrap">
+    <div class="vhead">
+      <div class="eyebrow">Bước 2/5 · Cấu hình</div>
+      <h1>Tạo cấu hình từ mạng của bạn</h1>
+      <p class="lead">Chọn một mẫu gần giống công ty bạn rồi chỉnh lại. Danh sách rule bên phải cập nhật ngay. Dữ liệu chỉ lưu trên trình duyệt của bạn.</p>
     </div>
+
+    <div class="wz">
+      <div class="wz-in">
+        <div class="box"><h3><span class="step">0</span>Bắt đầu từ mẫu</h3><div class="chips" id="presets"></div></div>
+        <div class="box">
+          <div class="box-h"><h3><span class="step">1</span>Đường Internet (WAN)</h3><button type="button" class="btn sm" id="addWan">+ Thêm WAN</button></div>
+          <div class="wan-h"><span>WAN</span><span>Tốc độ Mbps</span><span>Loại IP</span><span></span></div>
+          <div id="wans" style="display:grid;gap:8px"></div>
+          <p class="muted small">Nhập tốc độ đo thực tế. <button type="button" class="term" data-t="static">IP tĩnh</button> là IP cố định nhà mạng cấp, dùng được để đối tác whitelist.</p>
+        </div>
+        <div class="box">
+          <h3><span class="step">2</span>Công ty đang dùng gì?</h3>
+          <div class="svc" id="svc"></div>
+          <details>
+            <summary style="cursor:pointer;font-weight:600;font-size:.9rem">+ Thêm dịch vụ riêng</summary>
+            <div class="custom" style="margin-top:10px">
+              <input class="full" id="cName" placeholder="Tên dịch vụ, ví dụ: Phần mềm kho" aria-label="Tên dịch vụ">
+              <input id="cDst" placeholder="Domain / IP đích" aria-label="Domain hoặc IP đích">
+              <select id="cNeed" aria-label="Nhu cầu">
+                <option value="sticky">Cần giữ IP ổn định</option>
+                <option value="bulk">Cần tốc độ, tải nhiều</option>
+                <option value="pin_static">Đối tác whitelist IP</option>
+                <option value="isolate">Tách riêng, ít quan trọng</option>
+              </select>
+              <button type="button" class="btn sm full" id="cAdd">Thêm vào danh sách</button>
+            </div>
+            <div class="chips" id="custList" style="margin-top:8px"></div>
+          </details>
+        </div>
+        <div class="box">
+          <h3><span class="step">3</span>Khi rớt mạng</h3>
+          <label class="opt"><input type="checkbox" id="oBackupIp"><span>Đối tác đã whitelist cả IP của WAN dự phòng<br><small class="muted">Nếu chưa, traffic server sẽ dừng thay vì đi IP lạ.</small></span></label>
+          <label class="opt"><input type="checkbox" id="oGuestFb"><span>Cho Wi-Fi khách dùng WAN chính khi WAN của khách rớt</span></label>
+        </div>
+      </div>
+
+      <div class="wz-out" aria-live="polite">
+        <div class="summary" id="summary"></div>
+        <div class="warns" id="warns"></div>
+        <div class="box-h"><h3>Rule cần tạo, theo thứ tự ưu tiên</h3><span class="muted small">Bấm vào rule để xem từng trường</span></div>
+        <div class="stack" id="stack"></div>
+        <div class="row"><button type="button" class="btn primary" id="copy">Sao chép bảng cấu hình</button><span class="toast" id="toast" role="status"></span></div>
+        <textarea id="copyArea" rows="6" readonly hidden aria-label="Bảng cấu hình dạng văn bản"></textarea>
+      </div>
+    </div>
+
+    <div class="part">
+      <div class="ph"><h2>Làm trên WebUI</h2></div>
+      <div class="box">
+        <ol class="howto">
+          <li><span><b>WAN &gt;&gt; General Setup:</b> bật từng WAN, chọn Active Mode là <i>Always On</i>, bật Load Balance cho các WAN thuộc pool mặc định.</span></li>
+          <li><span><b>Objects Setting:</b> tạo IP Object cho server, tổng đài, camera; tạo nhóm Domain hoặc IP cho các dịch vụ trong bảng trên.</span></li>
+          <li><span><b>Routing &gt;&gt; Load-Balance/Route Policy:</b> tạo rule theo đúng thứ tự Priority. Số nhỏ hơn được xét trước. Giữ trong dải 151–249 để không đè lên route tĩnh và VPN (150).</span></li>
+          <li><span><b>Diagnose:</b> dùng công cụ chẩn đoán của Route Policy, nhập IP nguồn và đích để xem rule nào khớp.</span></li>
+          <li><span><b>Kiểm chứng:</b> từ từng máy, mở trang kiểm tra IP công cộng và xem bảng Session trên router.</span></li>
+        </ol>
+        <p class="muted small">Tên menu và trường có thể khác nhẹ theo model và phiên bản firmware DrayOS.</p>
+      </div>
+    </div>
+
+    <div class="part">
+      <div class="ph"><h2>Thử rút dây một WAN</h2><p class="lead">Dùng chính cấu hình phía trên. Bấm vào một WAN để giả lập mất kết nối.</p></div>
+      <div class="plugs" id="plugs"></div>
+      <div class="box scroll" style="padding:0"><table class="drill-t"><thead><tr><th>Rule</th><th>Đi qua</th><th>Khi rớt</th><th>Người dùng cảm nhận</th></tr></thead><tbody id="drillRows"></tbody></table></div>
+    </div>
+
+    <a class="next" href="#tinh-huong"><div><small>Bước tiếp theo</small><b>Xem tình huống mẫu</b><span>Bốn doanh nghiệp và cách xử lý từng nhóm traffic.</span></div><i>→</i></a>
+    <div class="react" data-sec="cau-hinh"></div>
+  </div>
 </section>
 
-<section id="5-gia-tri">
-    <div class="container">
-        <div class="section-heading">
-            <div class="section-label">5 hướng phân tích</div>
-            <h2>Thiết kế Multi-WAN theo bản chất Traffic</h2>
-            <p>
-                Không có một chế độ Load Balance phù hợp cho mọi loại traffic.
-                Hãy xác định đặc tính của từng workload trước khi chọn WAN và Mode.
-            </p>
-        </div>
+<!-- ================= 3. TINH HUONG ================= -->
+<section class="view" data-view="tinh-huong" hidden>
+  <div class="wrap">
+    <div class="vhead">
+      <div class="eyebrow">Bước 3/5 · Tình huống mẫu</div>
+      <h1>Bốn doanh nghiệp, bốn bài toán Multi-WAN</h1>
+      <p class="lead">Tìm trường hợp giống công ty bạn. Mỗi tình huống mở được thẳng trong trang Cấu hình để chỉnh tiếp.</p>
     </div>
-
-    <div class="pillar">
-        <div class="container"><div class="pillar-grid">
-            <div class="pillar-number">01</div><div>
-                <h2>Hiệu quả băng thông</h2>
-                <p class="pillar-intro">Session-Based phù hợp với workload tạo nhiều kết nối đồng thời.</p>
-                <div class="feature-grid">
-                    <div class="feature"><h4>Một connection không cộng hai WAN</h4><p>Một kết nối đơn lẻ không tự động chạy đồng thời trên WAN1 và WAN2.</p></div>
-                    <div class="feature"><h4>Nhiều session tạo ra lợi thế</h4><p>Download, Video, Backup, Cloud Sync hoặc workload nhiều session có thể phân bổ qua nhiều WAN.</p></div>
-                    <div class="feature"><h4>Không nên chia đều mọi traffic</h4><p>Traffic cần Public IP ổn định nên có Policy riêng.</p></div>
-                    <div class="feature"><h4>Phân bổ tài nguyên theo workload</h4><p>Mục tiêu không đơn thuần là "chia tải", mà là dùng đúng WAN cho đúng loại traffic.</p></div>
-                </div>
-            </div>
-        </div></div>
+    <div class="cases" id="cases"></div>
+    <div class="part">
+      <div class="ph"><h2>Từng nhóm traffic nên đi thế nào?</h2><p class="lead">Chọn một nhóm để xem WAN, Mode, cách xử lý khi rớt mạng và rủi ro nếu làm sai.</p></div>
+      <div class="matrix">
+        <div class="mx-list" role="listbox" aria-label="Nhóm traffic" id="mxList"></div>
+        <aside class="box mx-detail" id="mxDetail" aria-live="polite"></aside>
+      </div>
     </div>
-
-    <div class="pillar">
-        <div class="container"><div class="pillar-grid">
-            <div class="pillar-number">02</div><div>
-                <h2>Độ ổn định của phiên</h2>
-                <p class="pillar-intro">Một số dịch vụ có thể nhạy cảm với việc thay đổi Public IP.</p>
-                <div class="feature-grid">
-                    <div class="feature"><h4>IP-Based</h4><p>Giữ traffic của cùng source theo một đường WAN nhất định, giúp Public IP ổn định hơn.</p></div>
-                    <div class="feature"><h4>Session-Based</h4><p>Các session mới có thể được phân bổ sang nhiều WAN.</p></div>
-                    <div class="feature"><h4>Nhóm cần cân nhắc IP-Based</h4><p>Banking, ERP, SSH và dịch vụ có cơ chế kiểm soát Public IP.</p></div>
-                    <div class="feature"><h4>Nhóm có thể dùng Session-Based</h4><p>Video, Download, Cloud Sync, Backup, Update hoặc Speedtest.</p></div>
-                </div>
-            </div>
-        </div></div>
-    </div>
-
-    <div class="pillar">
-        <div class="container"><div class="pillar-grid">
-            <div class="pillar-number">03</div><div>
-                <h2>Kiểm soát Public IP</h2>
-                <p class="pillar-intro">Server hoặc dịch vụ yêu cầu Public IP cố định có thể được định tuyến qua WAN phù hợp.</p>
-                <div class="feature-grid">
-                    <div class="feature"><h4>Server</h4><p>Ghim traffic vào WAN có Public IP đã được đối tác whitelist.</p></div>
-                    <div class="feature"><h4>VoIP</h4><p>Lựa chọn WAN phù hợp với yêu cầu kết nối hoặc hệ thống SIP/VoIP.</p></div>
-                    <div class="feature"><h4>API / SaaS</h4><p>Dịch vụ yêu cầu khai báo Public IP có thể được định tuyến qua WAN tương ứng.</p></div>
-                    <div class="feature"><h4>Failover cần được cân nhắc</h4><p>Chuyển sang WAN dự phòng có thể làm thay đổi Public IP.</p></div>
-                </div>
-            </div>
-        </div></div>
-    </div>
-
-    <div class="pillar">
-        <div class="container"><div class="pillar-grid">
-            <div class="pillar-number">04</div><div>
-                <h2>Tối ưu trải nghiệm ứng dụng</h2>
-                <p class="pillar-intro">Thiết kế Policy theo Application, Domain, Country, IP hoặc nhóm người dùng.</p>
-                <div class="feature-grid">
-                    <div class="feature"><h4>Application</h4><p>Các ứng dụng có thể được áp dụng Policy Route khác nhau khi nền tảng hỗ trợ nhận diện Application.</p></div>
-                    <div class="feature"><h4>Domain</h4><p>Traffic đến domain cụ thể có thể được đưa vào Policy Route riêng.</p></div>
-                    <div class="feature"><h4>Country</h4><p>Country Object có thể xây dựng chính sách dựa trên GeoIP của destination.</p></div>
-                    <div class="feature"><h4>Policy Priority</h4><p>Rule cụ thể nên được đặt trước rule tổng quát để traffic được match đúng.</p></div>
-                </div>
-            </div>
-        </div></div>
-    </div>
-
-    <div class="pillar">
-        <div class="container"><div class="pillar-grid">
-            <div class="pillar-number">05</div><div>
-                <h2>Thiết kế & Troubleshooting</h2>
-                <p class="pillar-intro">Khi mỗi loại traffic có Policy riêng, troubleshooting cũng trở nên có cấu trúc hơn.</p>
-                <div class="feature-grid">
-                    <div class="feature"><h4>Traffic Matrix</h4><p>Xác định Source, Destination, Policy, WAN Pool, Mode và hành vi mong muốn.</p></div>
-                    <div class="feature"><h4>Policy Priority</h4><p>Rule cụ thể phải được xử lý trước rule tổng quát.</p></div>
-                    <div class="feature"><h4>Không cần đổi toàn bộ Internet</h4><p>Khi một ứng dụng gặp vấn đề, kiểm tra Policy tương ứng thay vì chuyển toàn bộ hệ thống sang WAN khác.</p></div>
-                    <div class="feature"><h4>Truy vết theo chuỗi</h4><p>Source → Destination → Priority → Policy → Pool → Mode → WAN → Failover.</p></div>
-                </div>
-            </div>
-        </div></div>
-    </div>
+    <a class="next" href="#thuc-hanh"><div><small>Bước tiếp theo</small><b>Tự kiểm tra bằng bài thực hành</b><span>Hai bài ngắn có chấm điểm.</span></div><i>→</i></a>
+    <div class="react" data-sec="tinh-huong"></div>
+  </div>
 </section>
 
-<section class="comparison">
-    <div class="container">
-        <div class="section-heading">
-            <div class="section-label">IP-Based vs Session-Based</div>
-            <h2>Chọn Mode theo đặc tính của Traffic</h2>
-            <p>Hai phương thức phục vụ hai mục tiêu thiết kế khác nhau.</p>
-        </div>
-
-        <div style="overflow-x:auto">
-            <table class="comparison-table">
-                <thead><tr><th>Tiêu chí</th><th>IP-Based</th><th>Session-Based</th></tr></thead>
-                <tbody>
-                    <tr><td><strong>Mục tiêu chính</strong></td><td>Ổn định đường đi / Public IP</td><td>Phân bổ nhiều session</td></tr>
-                    <tr><td><strong>Public IP</strong></td><td><span class="tag tag-ip">Ổn định hơn</span></td><td>Có thể thay đổi giữa các session</td></tr>
-                    <tr><td><strong>Nhiều connection</strong></td><td>Tập trung theo IP</td><td>Có thể phân bổ qua nhiều WAN</td></tr>
-                    <tr><td><strong>Phù hợp</strong></td><td>ERP, Banking, SSH, dịch vụ nhạy IP</td><td>Download, Video, Backup, Cloud Sync</td></tr>
-                    <tr><td><strong>Ưu tiên</strong></td><td>Tính ổn định</td><td>Khai thác tài nguyên WAN</td></tr>
-                </tbody>
-            </table>
-        </div>
+<!-- ================= 4. THUC HANH ================= -->
+<section class="view" data-view="thuc-hanh" hidden>
+  <div class="wrap">
+    <div class="vhead">
+      <div class="eyebrow">Bước 4/5 · Thực hành</div>
+      <h1>Bạn đã hiểu đến đâu?</h1>
+      <p class="lead">Bài A luyện thứ tự rule, lỗi phổ biến nhất khi cấu hình. Bài B luyện chọn cách xử lý cho từng tình huống.</p>
     </div>
+    <div class="lab-grid">
+      <div class="box">
+        <div class="box-h"><h3>Bài A · Gói tin này đi đâu?</h3><span class="tag tn" id="aScore">Chưa chạy</span></div>
+        <div class="goal"><b>Ý đồ:</b> cổng thuế đi IP-Based, Wi-Fi khách chỉ đi WAN2, server gọi API chỉ đi WAN1, còn lại chia Session-Based. Thứ tự hiện tại đang sai. Đoán kết quả, chạy thử, rồi sắp xếp lại.</div>
+        <div class="rlist" id="rlist"></div>
+        <div class="scroll"><table class="pk"><thead><tr><th>Gói tin</th><th>Bạn đoán</th><th>Thực tế</th></tr></thead><tbody id="pkRows"></tbody></table></div>
+        <div class="row"><button type="button" class="btn primary" id="aRun">Chạy gói tin</button><button type="button" class="btn" id="aReset">Đặt lại</button></div>
+        <p class="muted small" id="aHint"></p>
+      </div>
+      <div class="box">
+        <div class="box-h"><h3>Bài B · Chọn cách xử lý</h3><span class="tag tn" id="qScore"></span></div>
+        <div class="qbar"><i id="qBar" style="width:0"></i></div>
+        <div id="qBody" style="display:grid;gap:14px"></div>
+      </div>
+    </div>
+    <a class="next" href="#su-co"><div><small>Bước cuối</small><b>Xử lý sự cố</b><span>Khi có lỗi, lần theo 8 bước để tìm nguyên nhân.</span></div><i>→</i></a>
+    <div class="react" data-sec="thuc-hanh"></div>
+  </div>
 </section>
 
-<section class="matrix" id="traffic-matrix">
-    <div class="container">
-        <div class="section-heading">
-            <div class="section-label">Traffic Matrix</div>
-            <h2>Một ví dụ về cách thiết kế Policy</h2>
-            <p>Thay vì "mọi traffic → Load Balance", hãy xây dựng chiến lược theo từng nhóm workload.</p>
-        </div>
-        <div class="matrix-table-wrapper">
-            <table class="matrix-table">
-                <thead><tr><th>Traffic</th><th>WAN Pool</th><th>Mode</th><th>Mục tiêu</th></tr></thead>
-                <tbody>
-                    <tr><td>Server / API</td><td>WAN1</td><td>IP-Based</td><td>Public IP ổn định</td></tr>
-                    <tr><td>Banking / ERP</td><td>WAN1 + WAN2</td><td>IP-Based</td><td>Ổn định phiên</td></tr>
-                    <tr><td>Video / Download</td><td>WAN1 + WAN2</td><td>Session-Based</td><td>Tận dụng nhiều WAN</td></tr>
-                    <tr><td>Cloud Backup</td><td>WAN1 + WAN2</td><td>Session-Based</td><td>Khai thác tổng tài nguyên</td></tr>
-                    <tr><td>Guest Internet</td><td>WAN1 + WAN2</td><td>Session-Based</td><td>Phân bổ tải</td></tr>
-                </tbody>
-            </table>
-        </div>
+<!-- ================= 5. SU CO ================= -->
+<section class="view" data-view="su-co" hidden>
+  <div class="wrap">
+    <div class="vhead">
+      <div class="eyebrow">Bước 5/5 · Xử lý sự cố</div>
+      <h1>Từ “mạng chậm” đến nguyên nhân cụ thể</h1>
+      <p class="lead">Khi mỗi nhóm traffic có Policy riêng, bạn lần theo chuỗi quyết định của chính luồng bị lỗi thay vì chuyển cả công ty sang WAN khác.</p>
     </div>
-</section>
-
-<section class="troubleshooting" id="troubleshooting">
-    <div class="container">
-        <div class="section-heading">
-            <div class="section-label">Troubleshooting</div>
-            <h2>Từ "Internet chậm" đến một quy trình kiểm tra cụ thể</h2>
-            <p>Khi Multi-WAN được thiết kế theo Policy Route, troubleshooting có thể bắt đầu từ chính traffic đang gặp vấn đề.</p>
-        </div>
-        <div class="debug-flow">
-            <div class="debug-step">Source</div><div class="debug-arrow">→</div>
-            <div class="debug-step">Destination</div><div class="debug-arrow">→</div>
-            <div class="debug-step">Priority</div><div class="debug-arrow">→</div>
-            <div class="debug-step">Policy</div><div class="debug-arrow">→</div>
-            <div class="debug-step">WAN Pool</div><div class="debug-arrow">→</div>
-            <div class="debug-step">Mode</div><div class="debug-arrow">→</div>
-            <div class="debug-step">Actual WAN</div><div class="debug-arrow">→</div>
-            <div class="debug-step">Failover</div>
-        </div>
+    <div class="part">
+      <div class="ph"><h2>Triệu chứng thường gặp</h2></div>
+      <div class="tbl-wrap"><table class="cmp">
+        <thead><tr><th scope="col">Triệu chứng</th><th scope="col">Nguyên nhân thường gặp</th><th scope="col">Cách xử lý</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Ngân hàng, cổng thuế bị đăng xuất liên tục</th><td>Traffic đang Session-Based, Public IP đổi giữa các request</td><td>Tạo Policy IP-Based hoặc ghim một WAN cho domain đó</td></tr>
+          <tr><th scope="row">Speedtest chỉ ra tốc độ một WAN</th><td>Chế độ IP-Based, hoặc speedtest một luồng</td><td>Bình thường. Thử speedtest đa luồng hoặc Policy Session-Based riêng</td></tr>
+          <tr><th scope="row">Đối tác báo IP lạ gọi vào API</th><td>Rule chưa ghim WAN, hoặc Failover đã chuyển sang WAN2</td><td>Ghim WAN cho API; tắt Failover nếu đối tác chỉ chấp nhận một IP</td></tr>
+          <tr><th scope="row">Rule mới tạo không có tác dụng</th><td>Rule tổng quát nằm trên, hoặc Firewall đã xử lý trước</td><td>Đưa rule cụ thể lên trên; kiểm tra Firewall</td></tr>
+          <tr><th scope="row">VoIP rớt cuộc gọi khi WAN chính phục hồi</th><td>Failback cắt các session đang chạy</td><td>Cân nhắc tắt Failback cho rule VoIP</td></tr>
+        </tbody>
+      </table></div>
     </div>
-</section>
-
-<section class="conclusion">
-    <div class="container">
-        <div class="conclusion-box">
-            <div class="section-label">Kết luận</div>
-            <h2>Multi-WAN hiệu quả bắt đầu từ việc hiểu Traffic</h2>
-            <p>
-                Với DrayOS, hai WAN không nhất thiết phải được xem như một
-                "ống băng thông" duy nhất. Policy Route cho phép xây dựng
-                kiến trúc trong đó mỗi nhóm traffic có chiến lược sử dụng WAN riêng.
-            </p>
-            <div class="conclusion-highlight">
-                Traffic nào được phép đi WAN nào, dùng bao nhiêu WAN,
-                IP-Based hay Session-Based, Public IP nào và xử lý thế nào
-                khi WAN gặp sự cố — đó mới là bài toán Multi-WAN thực sự.
-            </div>
-        </div>
+    <div class="part">
+      <div class="ph"><h2>Lần theo 8 bước</h2><p class="lead">Chọn từng bước để xem cần kiểm tra gì.</p></div>
+      <div class="ts">
+        <div class="track-steps" id="tsSteps"></div>
+        <div class="box ts-panel" id="tsPanel" aria-live="polite"></div>
+      </div>
     </div>
+    <div class="part">
+      <div class="ph"><h2>Câu hỏi thường gặp</h2></div>
+      <div class="faq">
+        <details><summary>Có hai đường 100 Mbps, tải một file có được 200 Mbps không?</summary><p>Không, nếu trình tải dùng một kết nối. Một kết nối chỉ đi trên một WAN. Trình tải đa luồng với Policy Session-Based có thể tiệm cận tổng băng thông.</p></details>
+        <details><summary>Có nên để Session-Based cho cả công ty không?</summary><p>Không nên. Để Session-Based cho traffic lớn và chịu được đổi IP; ngân hàng, ERP, SaaS có whitelist dùng IP-Based hoặc ghim WAN. Mặc định an toàn là IP-Based.</p></details>
+        <details><summary>Failover có giữ nguyên Public IP không?</summary><p>Không. Khi chuyển sang WAN dự phòng, dịch vụ bên ngoài thấy IP của WAN dự phòng. Nếu đối tác chỉ whitelist một IP, hãy đăng ký thêm IP dự phòng hoặc tắt Failover cho rule đó.</p></details>
+        <details><summary>Policy theo Domain hay Application có hoạt động với HTTPS không?</summary><p>Có, trong phạm vi router nhận diện được. Kết quả phụ thuộc model và firmware, nên luôn kiểm chứng bằng Diagnose và bảng Session.</p></details>
+        <details><summary>Tỷ lệ chia giữa hai WAN khác tốc độ tính thế nào?</summary><p>Router có thể chia theo tỷ lệ tốc độ, ví dụ WAN 300 Mbps nhận khoảng ba lần số session của WAN 100 Mbps. Đây là chia theo số session, không theo dung lượng thật.</p></details>
+      </div>
+    </div>
+    <a class="next" href="#trang-chu"><div><small>Hoàn thành lộ trình</small><b>Về trang chủ</b><span>Hoặc quay lại trang Cấu hình để chỉnh tiếp.</span></div><i>↺</i></a>
+    <div class="react" data-sec="su-co"></div>
+  </div>
 </section>
+</main>
 
 <footer>
-    <div class="container footer-inner">
-        <div>
-            <div class="footer-brand">CTY TNHH CNTT AN PHÁT</div>
-            <div>Hỗ trợ kỹ thuật chuyên nghiệp</div>
-            <div>Điện thoại: 1900.633.641 · Email: hotro@anphat.vn · Website: www.anphat.vn</div>
-        </div>
-
-        <div class="footer-logos">
-            <img class="logo-ap"
-                 src="data:image/png;base64,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"
-                 alt="AN PHÁT">
-            <img class="logo-draytek"
-                 src="https://upload.wikimedia.org/wikipedia/commons/f/fc/Logo_of_DrayTek.svg"
-                 alt="DrayTek">
-        </div>
-    </div>
+  <div class="wrap">
+    <span>Thiết kế lại từ nội dung <a href="https://policy-route-load-balancing-mode.draytek.vn/" target="_blank" rel="noopener">policy-route-load-balancing-mode.draytek.vn</a>, bổ sung từ tài liệu DrayTek. Đề xuất cấu hình là điểm khởi đầu; kiểm chứng trên thiết bị thật trước khi áp dụng.</span>
+    <span>Tham khảo: <a href="https://www.draytek.co.uk/support/guides/kb-policy-routing-guide-v2" target="_blank" rel="noopener">Policy Routing with Metrics</a> · <a href="https://www.draytek.co.uk/information/our-technology/load-balancing" target="_blank" rel="noopener">Load Balancing</a> · <a href="https://www.draytek.com/support/knowledge-base/5315" target="_blank" rel="noopener">KB 5315</a> · <a href="https://www.draytek.com/support/knowledge-base/5013" target="_blank" rel="noopener">KB 5013</a></span>
+  </div>
 </footer>
 
-</body>
-</html>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const wanTag=i=>`<span class="tag wt${i+1}">WAN${i+1}</span>`;
+const poolTags=p=>p.map(wanTag).join(" ");
+
+/* ================= router ================= */
+const VIEWS=[...document.querySelectorAll(".view")].map(v=>v.dataset.view);
+function route(){
+  const h=location.hash.slice(1);const v=VIEWS.includes(h)?h:"trang-chu";
+  document.querySelectorAll(".view").forEach(s=>s.hidden=s.dataset.view!==v);
+  document.querySelectorAll("#navList a").forEach(a=>a.getAttribute("href")==="#"+v?a.setAttribute("aria-current","page"):a.removeAttribute("aria-current"));
+  hideTip();window.scrollTo(0,0);
+}
+addEventListener("hashchange",route);
+
+/* ================= glossary tooltips ================= */
+const TERMS={
+  wan:["WAN","Một đường Internet vào công ty, ví dụ một hợp đồng cáp quang."],
+  ip:["Public IP","Địa chỉ mà website, ngân hàng, đối tác nhìn thấy khi bạn truy cập. Mỗi WAN có một Public IP khác nhau."],
+  session:["Session","Một kết nối từ một máy tới một dịch vụ. Mở một trang web có thể tạo hàng chục session."],
+  policy:["Policy Route","Một quy tắc nói: traffic từ đâu, tới đâu thì đi đường nào và chia ra sao."],
+  static:["IP tĩnh","Public IP cố định, không đổi sau mỗi lần router kết nối lại. Cần khi đối tác whitelist IP."]
+};
+const tip=$("tip");let tipFor=null;
+function showTip(el){const t=TERMS[el.dataset.t];if(!t)return;tip.innerHTML=`<b>${t[0]}</b>${t[1]}`;tip.hidden=false;tipFor=el;
+  const r=el.getBoundingClientRect(),w=tip.offsetWidth,hh=tip.offsetHeight;
+  let x=Math.min(Math.max(16,r.left),innerWidth-w-16),y=r.bottom+8;if(y+hh>innerHeight-8)y=r.top-hh-8;
+  tip.style.left=x+"px";tip.style.top=y+"px"}
+function hideTip(){tip.hidden=true;tipFor=null}
+document.addEventListener("click",e=>{const t=e.target.closest(".term");if(t){tipFor===t?hideTip():showTip(t)}else if(!e.target.closest("#tip"))hideTip()});
+document.addEventListener("mouseover",e=>{const t=e.target.closest(".term");if(t)showTip(t)});
+document.addEventListener("mouseout",e=>{const t=e.target.closest(".term");if(t&&!t.contains(e.relatedTarget))hideTip()});
+document.addEventListener("focusin",e=>{const t=e.target.closest(".term");if(t)showTip(t)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")hideTip()});
+addEventListener("scroll",()=>{if(!tip.hidden)hideTip()},{passive:true});
+
+/* ================= 1. simulator ================= */
+(()=>{
+const WAN={1:"203.0.113.10",2:"198.51.100.20"};
+const SRC=[{ip:"192.168.1.10",who:"Kế toán"},{ip:"192.168.1.20",who:"Kỹ thuật"}];
+const DST=[{k:"bank",name:"Ngân hàng"},{k:"yt",name:"YouTube"},{k:"drive",name:"Google Drive"}];
+let mode="ip",ss=[],cur={1:0,2:0},seq=0;
+const wts=()=>({1:+$("w1").value,2:+$("w2").value});
+const hash=s=>{let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return (h>>>0)/4294967296};
+const pickS=()=>{const w=wts(),t=w[1]+w[2];cur[1]+=w[1];cur[2]+=w[2];const k=cur[1]>=cur[2]?1:2;cur[k]-=t;return k};
+const pickI=(s,d)=>{const w=wts();return hash(s+">"+d)<w[1]/(w[1]+w[2])?1:2};
+const assign=s=>s.wan=mode==="ip"?pickI(s.src.ip,s.dst.k):pickS();
+function add(){for(let i=0;i<6;i++){const s={id:++seq,src:SRC[i%2],dst:DST[Math.floor(i/2)%3],fresh:true};assign(s);ss.push(s)}if(ss.length>30)ss=ss.slice(-30);render()}
+function reassign(){cur={1:0,2:0};ss.forEach(assign);render()}
+function render(){
+  const c={1:0,2:0};ss.forEach(s=>c[s.wan]++);const n=ss.length||1;
+  $("b1").style.width=c[1]/n*100+"%";$("b2").style.width=c[2]/n*100+"%";$("c1").textContent=c[1];$("c2").textContent=c[2];
+  $("simRows").innerHTML=ss.slice().reverse().map(s=>`<tr class="${s.fresh?"new":""}"><td>${s.id}</td><td><span class="mono">${s.src.ip}</span> <small class="muted">${s.src.who}</small></td><td>${s.dst.name}</td><td>${wanTag(s.wan-1)}</td><td class="mono">${WAN[s.wan]}</td></tr>`).join("");
+  ss.forEach(s=>s.fresh=false);
+  $("verdicts").innerHTML=DST.map(d=>{
+    const per={};ss.filter(s=>s.dst.k===d.k).forEach(s=>{(per[s.src.ip]??=new Set()).add(s.wan)});
+    const srcs=Object.values(per);if(!srcs.length)return `<div class="verdict"><b>${d.name}</b><span class="muted">Chưa có session</span></div>`;
+    const split=srcs.some(w=>w.size>1);
+    if(d.k==="bank")return split?`<div class="verdict bad"><b>${d.name}</b><span>Cùng một máy xuất hiện với 2 Public IP. Nguy cơ đăng xuất.</span></div>`:`<div class="verdict good"><b>${d.name}</b><span>Mỗi máy giữ một Public IP. Phiên ổn định.</span></div>`;
+    return split?`<div class="verdict good"><b>${d.name}</b><span>Session của một máy trải trên 2 WAN. Tận dụng tổng băng thông.</span></div>`:`<div class="verdict"><b>${d.name}</b><span>Mỗi máy dồn vào một WAN. Tối đa bằng tốc độ WAN đó.</span></div>`;
+  }).join("");
+  $("modeNote").textContent=mode==="ip"?"IP-Based: cặp IP nguồn và IP đích quyết định WAN. Một máy mở bao nhiêu session tới cùng dịch vụ vẫn đi một WAN.":"Session-Based: mỗi session mới chia theo tỷ lệ tốc độ hai WAN, kể cả cùng máy tới cùng dịch vụ. Lợi băng thông nhưng Public IP thay đổi.";
+}
+const setMode=m=>{mode=m;$("mIP").setAttribute("aria-pressed",m==="ip");$("mSS").setAttribute("aria-pressed",m==="ss");reassign()};
+$("mIP").onclick=()=>setMode("ip");$("mSS").onclick=()=>setMode("ss");$("simAdd").onclick=add;
+$("simReset").onclick=()=>{ss=[];seq=0;cur={1:0,2:0};render()};
+["w1","w2"].forEach(id=>$(id).addEventListener("input",()=>{$(id+"v").textContent=$(id).value+" Mbps";reassign()}));
+add();add();
+})();
+
+/* ================= 2. config wizard ================= */
+const SVC={
+  bank:{n:"Internet Banking",need:"sticky",dst:"Domain ngân hàng"},
+  tax:{n:"Thuế điện tử, Hải quan, BHXH",need:"sticky",dst:"Domain cổng dịch vụ công"},
+  erp:{n:"ERP, kế toán online",need:"sticky",dst:"Domain/IP nhà cung cấp ERP"},
+  meet:{n:"Họp trực tuyến (Zoom, Teams, Meet)",need:"sticky",dst:"Domain dịch vụ họp"},
+  pos:{n:"Máy POS, thanh toán thẻ",need:"sticky",dst:"Cổng thanh toán",src:"IP Object: máy POS"},
+  server:{n:"Server/API có đối tác whitelist IP",need:"pin_static",dst:"IP/Domain đối tác",src:"IP Object: server nội bộ"},
+  voip:{n:"Tổng đài VoIP, SIP trunk",need:"pin",dst:"IP nhà cung cấp SIP",src:"IP Object: tổng đài IP-PBX"},
+  camera:{n:"Camera cloud, NVR đẩy hình",need:"camera",dst:"Any",src:"IP Object: camera/NVR"},
+  video:{n:"Video, mạng xã hội",need:"bulk",dst:"Domain/Application video"},
+  backup:{n:"Cloud backup, đồng bộ",need:"bulk",dst:"Domain dịch vụ lưu trữ"},
+  update:{n:"Windows, phần mềm cập nhật",need:"bulk",dst:"Domain cập nhật"},
+  guest:{n:"Wi-Fi khách",need:"isolate",dst:"Any",src:"Subnet Wi-Fi khách (vd 192.168.2.0/24)"}
+};
+const NEED={pin_static:{title:"Server và API cố định IP",o:1},pin:{title:"Thoại VoIP",o:2},sticky:{title:"Dịch vụ cần giữ IP",o:3},isolate:{title:"Wi-Fi khách",o:4},camera:{title:"Camera đẩy hình",o:5},bulk:{title:"Traffic tải nhiều",o:6}};
+const PRESETS={
+  office:{n:"Văn phòng 20 người",wans:[{s:300,st:true},{s:100,st:false}],svc:["bank","tax","erp","meet","video","update","guest"]},
+  shop:{n:"Cửa hàng có camera",wans:[{s:200,st:false},{s:100,st:false}],svc:["pos","camera","guest","video"]},
+  dev:{n:"Công ty phần mềm",wans:[{s:1000,st:true},{s:500,st:true},{s:300,st:false}],svc:["server","voip","meet","backup","update","video","bank"]},
+  cafe:{n:"Quán cà phê",wans:[{s:300,st:false},{s:300,st:false}],svc:["guest","video","pos"]}
+};
+let S=store.get("pr.state")||{preset:"office",wans:PRESETS.office.wans.map(w=>({...w})),svc:[...PRESETS.office.svc],custom:[],backupIp:false,guestFb:false};
+let G=null,down=new Set();
+
+function generate(st){
+  const W=st.wans.map((w,i)=>({...w,i})),by=[...W].sort((a,b)=>b.s-a.s),stat=by.filter(w=>w.st);
+  const primary=(stat[0]||by[0]).i,slowest=by[by.length-1].i,second=(by.find(w=>w.i!==primary)||by[0]).i,all=W.map(w=>w.i);
+  const items=[...st.svc.map(k=>SVC[k]),...st.custom.map(c=>({n:c.n,need:c.need,dst:c.dst||"Domain/IP đích"}))];
+  const groups={};items.forEach(it=>(groups[it.need]??=[]).push(it));
+  const hasPin=!!(groups.pin_static||groups.pin),warns=[];
+  const rules=Object.keys(groups).sort((a,b)=>NEED[a].o-NEED[b].o).map(need=>{
+    const g=groups[need],r={need,title:NEED[need].title,svcs:g.map(x=>x.n),src:[...new Set(g.map(x=>x.src).filter(Boolean))].join("; ")||"Any",dst:[...new Set(g.map(x=>x.dst))].join("; "),fo:null};
+    if(need==="pin_static"){r.pool=[primary];r.fo=st.backupIp&&W.length>1?second:null;
+      r.why="Đối tác chỉ chấp nhận Public IP đã đăng ký, nên traffic phải luôn ra đúng WAN có IP đó.";
+      r.foText=r.fo!=null?`Bật, sang WAN${r.fo+1} (đối tác đã whitelist IP này)`:"Tắt. Thà dừng còn hơn đi IP lạ";
+      r.feel={ok:"Đối tác nhận đúng IP.",fo:"Đối tác thấy IP dự phòng, không lỗi vì đã whitelist.",stop:"Mất kết nối tới đối tác cho tới khi WAN chính trở lại."};
+      if(!W[primary].st)warns.push({t:"b",m:"Có dịch vụ cần whitelist IP nhưng chưa có WAN nào là IP tĩnh. Hãy đăng ký IP tĩnh với nhà mạng."});
+      if(!st.backupIp&&W.length>1)warns.push({t:"w",m:"Server/API sẽ dừng khi WAN chính rớt. Đăng ký thêm IP dự phòng với đối tác nếu cần chạy liên tục."});
+    }else if(need==="pin"){r.pool=[primary];r.fo=W.length>1?second:null;
+      r.why="Tổng đài SIP thường đăng ký theo IP và cần đường đi ổn định, độ trễ thấp.";
+      r.foText=r.fo!=null?`Bật, sang WAN${r.fo+1}. Cân nhắc tắt Failback`:"Không có WAN dự phòng";
+      r.feel={ok:"Gọi bình thường.",fo:"Cuộc gọi đang diễn ra bị rớt, tổng đài đăng ký lại qua IP mới.",stop:"Mất thoại."};
+      warns.push({t:"w",m:"VoIP: Failback sẽ cắt cuộc gọi đang diễn ra khi WAN chính phục hồi. Nên tắt Failback hoặc chấp nhận rủi ro này."});
+    }else if(need==="sticky"){r.pool=all;r.mode="IP-Based";
+      r.why="Vẫn chia tải giữa nhiều người dùng, nhưng mỗi máy giữ một Public IP suốt phiên làm việc.";
+      r.foText="Tự động trong pool: WAN còn sống nhận traffic";
+      r.feel={ok:"Không bị đăng xuất giữa chừng.",degr:"Người đang dùng WAN rớt phải đăng nhập lại một lần.",stop:"Mất kết nối."};
+    }else if(need==="isolate"){r.pool=[slowest];r.fo=st.guestFb&&W.length>1?(by[0].i===slowest?second:by[0].i):null;
+      r.why="Tách khách khỏi đường chính để nhân viên luôn có băng thông ổn định.";
+      r.foText=r.fo!=null?`Bật, sang WAN${r.fo+1}`:"Tắt. Khách tạm mất mạng, nhân viên không bị ảnh hưởng";
+      r.feel={ok:"Khách dùng mạng bình thường trên đường riêng.",fo:"Khách chuyển sang đường chính, có thể làm chậm nhân viên.",stop:"Khách tạm mất Wi-Fi."};
+    }else if(need==="camera"){r.pool=[slowest];
+      r.why="Camera đẩy hình liên tục, chiếm upload. Đặt ở WAN phụ để không ảnh hưởng nghiệp vụ.";
+      r.foText="Tắt, tránh chiếm WAN chính";
+      r.feel={ok:"Xem camera từ xa bình thường.",stop:"Tạm mất hình từ xa. NVR vẫn ghi tại chỗ."};
+    }else{r.pool=hasPin&&W.length>=3?all.filter(i=>i!==primary):all;r.mode=r.pool.length>1?"Session-Based":null;
+      const reserved=r.pool.length<all.length;
+      r.why=reserved?`Nhiều session, không nhạy đổi IP. Chừa WAN${primary+1} cho server và thoại.`:"Nhiều session, không nhạy đổi IP. Tận dụng được tổng băng thông.";
+      r.fo=reserved?primary:null;r.foText=reserved?`Trong pool; nếu cả pool rớt thì sang WAN${primary+1}`:"Tự động trong pool";
+      r.feel={ok:"Tải nhanh, tận dụng nhiều WAN.",degr:"Chậm hơn, các tải đang chạy trên WAN rớt phải tiếp tục lại.",fo:"Chuyển sang WAN chính, có thể làm chậm server và thoại.",stop:"Mất kết nối."};
+    }
+    if(!r.mode)r.mode=r.pool.length>1?"IP-Based":"Một WAN";
+    return r;
+  });
+  rules.forEach((r,i)=>r.prio=Math.min(160+i*10,249));
+  if(by[0].s>=by[by.length-1].s*5)warns.push({t:"w",m:"Các WAN chênh lệch tốc độ lớn. Traffic nặng vẫn có thể dồn vào WAN chậm. Theo dõi sau khi áp dụng."});
+  if(!warns.length)warns.push({t:"g",m:"Không phát hiện điểm rủi ro rõ ràng. Hãy kiểm chứng bằng Diagnose sau khi tạo rule."});
+  return {rules,warns,all,tot:W.reduce((a,w)=>a+w.s,0)};
+}
+const modeTag=m=>m==="Session-Based"?'<span class="tag wt2">Session-Based</span>':m==="IP-Based"?'<span class="tag wt1">IP-Based</span>':'<span class="tag tn">Ghim 1 WAN</span>';
+
+function renderPresets(){$("presets").innerHTML=Object.entries(PRESETS).map(([k,p])=>`<button type="button" class="chip" data-p="${k}" aria-pressed="${S.preset===k}">${p.n}</button>`).join("")}
+function applyPreset(k){const p=PRESETS[k];S={...S,preset:k,wans:p.wans.map(w=>({...w})),svc:[...p.svc],custom:[]};renderWizard()}
+$("presets").addEventListener("click",e=>{const b=e.target.closest("[data-p]");if(b)applyPreset(b.dataset.p)});
+function renderWans(){
+  $("wans").innerHTML=S.wans.map((w,i)=>`<div class="wan">${wanTag(i)}<input type="number" id="ws${i}" min="1" max="100000" value="${w.s}" aria-label="Tốc độ WAN${i+1}"><select id="wst${i}" aria-label="Loại IP WAN${i+1}"><option value="1" ${w.st?"selected":""}>IP tĩnh</option><option value="0" ${w.st?"":"selected"}>IP động</option></select><button type="button" class="x" data-rm="${i}" aria-label="Xoá WAN${i+1}" ${S.wans.length<=2?"hidden":""}>×</button></div>`).join("");
+  $("addWan").disabled=S.wans.length>=4;
+}
+$("wans").addEventListener("input",e=>{const m=e.target.id.match(/^ws(t?)(\d)$/);if(!m)return;const i=+m[2];
+  if(m[1])S.wans[i].st=e.target.value==="1";else S.wans[i].s=Math.max(1,+e.target.value||1);S.preset=null;renderPresets();renderOut()});
+$("wans").addEventListener("click",e=>{const b=e.target.closest("[data-rm]");if(b){S.wans.splice(+b.dataset.rm,1);S.preset=null;renderWizard()}});
+$("addWan").onclick=()=>{if(S.wans.length<4){S.wans.push({s:100,st:false});S.preset=null;renderWizard()}};
+function renderSvc(){
+  $("svc").innerHTML=Object.entries(SVC).map(([k,s])=>`<label><input type="checkbox" id="sv_${k}" data-k="${k}" ${S.svc.includes(k)?"checked":""}><span>${s.n}</span></label>`).join("");
+  $("custList").innerHTML=S.custom.map((c,j)=>`<span class="chip">${esc(c.n)} · ${NEED[c.need].title} <button type="button" data-cr="${j}" aria-label="Xoá ${esc(c.n)}" style="border:0;background:none;cursor:pointer;color:var(--muted)">×</button></span>`).join("");
+}
+$("svc").addEventListener("change",e=>{const k=e.target.dataset.k;if(!k)return;S.svc=e.target.checked?[...S.svc,k]:S.svc.filter(x=>x!==k);S.preset=null;renderPresets();renderOut()});
+$("cAdd").onclick=()=>{const n=$("cName").value.trim();if(!n){$("cName").focus();return}S.custom.push({n:n.slice(0,60),dst:$("cDst").value.trim().slice(0,80),need:$("cNeed").value});$("cName").value="";$("cDst").value="";renderSvc();renderOut()};
+$("custList").addEventListener("click",e=>{const b=e.target.closest("[data-cr]");if(b){S.custom.splice(+b.dataset.cr,1);renderSvc();renderOut()}});
+$("oBackupIp").onchange=e=>{S.backupIp=e.target.checked;renderOut()};
+$("oGuestFb").onchange=e=>{S.guestFb=e.target.checked;renderOut()};
+
+function renderOut(){
+  store.set("pr.state",S);G=generate(S);
+  $("summary").innerHTML=`<div class="sum"><b>${S.wans.length}</b><span>WAN</span></div><div class="sum"><b>${G.tot.toLocaleString("vi-VN")}</b><span>Mbps tổng (lý thuyết)</span></div><div class="sum"><b>${S.wans.filter(w=>w.st).length}</b><span>WAN IP tĩnh</span></div><div class="sum"><b>${G.rules.length}</b><span>Rule cần tạo</span></div>`;
+  $("warns").innerHTML=G.warns.map(w=>`<div class="wn ${w.t}"><span class="tag ${w.t==="b"?"tbad":w.t==="w"?"twarn":"tok"}">${w.t==="b"?"Lỗi":w.t==="w"?"Lưu ý":"Ổn"}</span><span>${w.m}</span></div>`).join("");
+  const def=`<div class="rule default"><div class="rule-h" style="cursor:default"><span class="prio">250</span><div><h4>Mặc định: mọi traffic còn lại</h4><small>Không cần tạo rule. Đi theo Load Balance pool trong WAN &gt;&gt; General Setup</small></div><div class="pills">${poolTags(G.all)}${modeTag("IP-Based")}</div></div></div>`;
+  $("stack").innerHTML=(G.rules.length?G.rules.map((r,i)=>`<details class="rule" ${i===0?"open":""}><summary class="rule-h"><span class="prio">${r.prio}</span><div><h4>${esc(r.title)}</h4><small>${r.svcs.map(esc).join(", ")}</small></div><div class="pills">${poolTags(r.pool)}${modeTag(r.mode)}</div></summary>
+    <div class="rule-b"><p>${r.why}</p><table class="fields"><tbody>
+      <tr><th>Enable</th><td>Bật</td></tr><tr><th>Comment</th><td>${esc(r.title)}</td></tr><tr><th>Priority</th><td class="mono">${r.prio}</td></tr>
+      <tr><th>Source</th><td>${esc(r.src)}</td></tr><tr><th>Destination</th><td>${esc(r.dst)}</td></tr><tr><th>Protocol / Port</th><td>Any (hoặc giới hạn theo dịch vụ)</td></tr>
+      <tr><th>Interface</th><td>${poolTags(r.pool)}</td></tr><tr><th>Load Balance mode</th><td>${r.pool.length>1?r.mode:"Không áp dụng (một WAN)"}</td></tr><tr><th>Failover</th><td>${r.foText}</td></tr>
+    </tbody></table></div></details>`).join(""):`<div class="box"><p class="muted">Chưa chọn dịch vụ nào. Chọn ít nhất một dịch vụ ở bước 2.</p></div>`)+def;
+  renderDrill();
+}
+function renderWizard(){renderPresets();renderWans();renderSvc();$("oBackupIp").checked=S.backupIp;$("oGuestFb").checked=S.guestFb;down=new Set();renderOut()}
+$("copy").onclick=()=>{
+  const L=["POLICY ROUTE - de xuat cau hinh",S.wans.map((w,i)=>`WAN${i+1}: ${w.s} Mbps, ${w.st?"IP tinh":"IP dong"}`).join(" | "),""];
+  G.rules.forEach(r=>L.push(`[${r.prio}] ${r.title}`,`  Dich vu: ${r.svcs.join(", ")}`,`  Source: ${r.src}`,`  Destination: ${r.dst}`,`  Interface: ${r.pool.map(i=>"WAN"+(i+1)).join(" + ")}`,`  Mode: ${r.pool.length>1?r.mode:"Mot WAN"}`,`  Failover: ${r.foText}`,""));
+  L.push("[250] Mac dinh: Load Balance pool "+G.all.map(i=>"WAN"+(i+1)).join(" + "));
+  const txt=L.join("\n"),ta=$("copyArea");ta.value=txt;
+  navigator.clipboard.writeText(txt).then(()=>{$("toast").textContent="Đã sao chép.";ta.hidden=true},()=>{ta.hidden=false;ta.select();$("toast").textContent="Trình duyệt chặn sao chép tự động. Hãy bấm Ctrl/Cmd+C."});
+  setTimeout(()=>$("toast").textContent="",4000);
+};
+function renderDrill(){
+  $("plugs").innerHTML=S.wans.map((w,i)=>`<button type="button" class="plug" data-w="${i}" aria-pressed="${down.has(i)}"><i></i>${down.has(i)?"WAN"+(i+1)+" đang rớt":"Rút dây WAN"+(i+1)}</button>`).join("");
+  const rows=[...G.rules,{title:"Mặc định",pool:G.all,fo:null,feel:{ok:"Lướt web bình thường.",degr:"Người đang đi WAN rớt bị gián đoạn vài giây.",stop:"Mất Internet."}}];
+  $("drillRows").innerHTML=rows.map(r=>{
+    const alive=r.pool.filter(i=>!down.has(i));let st,feel;
+    if(!down.size){st='<span class="tag tok">Bình thường</span>';feel=r.feel.ok}
+    else if(alive.length===r.pool.length){st='<span class="tag tok">Không ảnh hưởng</span>';feel=r.feel.ok}
+    else if(alive.length){st=`<span class="tag twarn">Còn ${alive.map(i=>"WAN"+(i+1)).join(" + ")}</span>`;feel=r.feel.degr||r.feel.ok}
+    else if(r.fo!=null&&!down.has(r.fo)){st=`<span class="tag twarn">Sang WAN${r.fo+1} · đổi Public IP</span>`;feel=r.feel.fo||r.feel.degr}
+    else{st='<span class="tag tbad">Dừng</span>';feel=r.feel.stop}
+    return `<tr><td><b>${esc(r.title)}</b></td><td>${poolTags(r.pool)}</td><td>${st}</td><td>${feel}</td></tr>`;
+  }).join("")+(down.size&&down.size===S.wans.length?`<tr><td colspan="4" class="muted">Tất cả WAN đều rớt. Không cấu hình nào giữ được Internet trong trường hợp này.</td></tr>`:"");
+}
+$("plugs").addEventListener("click",e=>{const b=e.target.closest("[data-w]");if(!b)return;const i=+b.dataset.w;down.has(i)?down.delete(i):down.add(i);renderDrill()});
+
+/* ================= 3. cases + matrix ================= */
+const CASES=[
+  {t:"Văn phòng kế toán 20 người",p:"office",b:"Bật Load Balance chia theo session cho cả công ty. Cổng thuế và ngân hàng đăng xuất liên tục.",a:"Nhóm thuế, ngân hàng, ERP chuyển sang IP-Based. Video và cập nhật vẫn Session-Based. Wi-Fi khách ghim WAN2.",tip:"Lỗi rất phổ biến: cổng dịch vụ công nhạy với đổi IP."},
+  {t:"Chuỗi cửa hàng có camera",p:"shop",b:"Camera đẩy hình lên cloud chiếm hết upload, máy POS quẹt thẻ chậm, đôi khi lỗi giao dịch.",a:"Camera ghim WAN2, tắt Failover. POS đi IP-Based trên cả hai WAN để vừa ổn định vừa có dự phòng.",tip:"Ưu tiên giao dịch tiền hơn hình ảnh. NVR vẫn ghi tại chỗ khi mất mạng."},
+  {t:"Công ty phần mềm 3 WAN",p:"dev",b:"Đối tác whitelist IP WAN1. Khi WAN1 chập chờn, router failover và đối tác chặn vì IP lạ.",a:"Server/API ghim WAN1, chỉ failover khi đối tác đã whitelist IP WAN2. Backup, video dùng WAN2+3 để chừa WAN1.",tip:"Với 3 WAN trở lên, hãy dành riêng một đường cho traffic quan trọng."},
+  {t:"Quán cà phê Wi-Fi miễn phí",p:"cafe",b:"Hai đường 300 Mbps nhưng khách vẫn kêu chậm vì vài người tải nặng, máy tính tiền mất kết nối.",a:"POS tách riêng IP-Based. Wi-Fi khách ghim một WAN, kết hợp giới hạn băng thông mỗi người.",tip:"Policy Route chọn đường đi; giới hạn tốc độ mỗi người là việc của Bandwidth Management."}
+];
+$("cases").innerHTML=CASES.map(c=>`<article class="case"><h3>${c.t}</h3><div class="ba"><div class="b4"><b>Trước</b>${c.b}</div><div class="af"><b>Sau</b>${c.a}</div></div><p class="muted small">${c.tip}</p><div><button type="button" class="btn sm" data-case="${c.p}">Mở trong trang Cấu hình →</button></div></article>`).join("");
+$("cases").addEventListener("click",e=>{const b=e.target.closest("[data-case]");if(!b)return;applyPreset(b.dataset.case);location.hash="cau-hinh"});
+const MX=[
+  {t:"Server / API có whitelist",pool:[0],mode:"Ghim WAN",why:"Đối tác chỉ chấp nhận Public IP đã đăng ký.",fo:"Tắt, hoặc chỉ bật khi đã đăng ký thêm IP WAN2.",risk:"Failover sang WAN2 làm đối tác thấy IP lạ và từ chối."},
+  {t:"Ngân hàng / ERP / cổng thuế",pool:[0,1],mode:"IP-Based",why:"Chia tải giữa nhiều người, nhưng mỗi máy giữ một Public IP suốt phiên.",fo:"Bật. Người dùng có thể phải đăng nhập lại khi chuyển WAN.",risk:"Session-Based làm IP đổi giữa các request, dẫn tới đăng xuất."},
+  {t:"VoIP / SIP trunk",pool:[0],mode:"Ghim WAN",why:"Tổng đài thường đăng ký theo IP, cần độ trễ thấp và ổn định.",fo:"Bật nếu nhà cung cấp SIP chấp nhận IP WAN2. Cân nhắc tắt Failback.",risk:"Failback cắt cuộc gọi đang diễn ra khi WAN chính phục hồi."},
+  {t:"Video / Download",pool:[0,1],mode:"Session-Based",why:"Nhiều session song song, không nhạy đổi IP.",fo:"Bật. Không ảnh hưởng nghiệp vụ.",risk:"Một số trang kiểm tra IP có thể bắt xác thực lại."},
+  {t:"Cloud Backup / Sync",pool:[0,1],mode:"Session-Based",why:"Khối lượng lớn, nhiều luồng. Tách Policy riêng để không chiếm băng thông nghiệp vụ.",fo:"Bật. Có thể chạy ngoài giờ.",risk:"Không giới hạn dễ làm nghẽn cả hai WAN trong giờ làm việc."},
+  {t:"Guest Wi-Fi",pool:[1],mode:"Ghim WAN",why:"Tách khách khỏi đường chính để nhân viên luôn ổn định.",fo:"Tùy chính sách. Có thể tắt để khách không dùng WAN chính.",risk:"Để chung pool, khách có thể chiếm băng thông nghiệp vụ."}
+];
+function mxRender(i){
+  $("mxList").innerHTML=MX.map((r,j)=>`<button type="button" class="mx" role="option" aria-selected="${i===j}" data-i="${j}"><strong>${r.t}</strong><span>${poolTags(r.pool)}</span>${modeTag(r.mode)}</button>`).join("");
+  const r=MX[i];
+  $("mxDetail").innerHTML=`<div class="eyebrow">Policy đề xuất</div><h3 style="font-size:1.2rem">${r.t}</h3><dl><dt>WAN Pool</dt><dd>${poolTags(r.pool)}</dd><dt>Mode</dt><dd>${modeTag(r.mode)}</dd><dt>Vì sao</dt><dd>${r.why}</dd><dt>Failover</dt><dd>${r.fo}</dd></dl><div class="risk"><b>Rủi ro nếu làm sai:</b> ${r.risk}</div>`;
+}
+$("mxList").addEventListener("click",e=>{const b=e.target.closest(".mx");if(b)mxRender(+b.dataset.i)});
+
+/* ================= 4. lab ================= */
+const RULES={A:{t:"Mọi nguồn → mọi đích",out:"s",m:()=>true},B:{t:"Wi-Fi khách 192.168.2.0/24 → mọi đích",out:"w2",m:p=>p.src.startsWith("192.168.2.")},C:{t:"Mọi nguồn → cổng thuế",out:"ip",m:p=>p.dst==="thue"},D:{t:"Server 192.168.1.50 → API đối tác",out:"w1",m:p=>p.src==="192.168.1.50"&&p.dst==="api"}};
+const OUT={s:"WAN1+2 · Session-Based",w2:"Chỉ WAN2",ip:"WAN1+2 · IP-Based",w1:"Chỉ WAN1"};
+const PK=[{src:"192.168.1.15",dst:"thue",dn:"cổng thuế",want:"ip"},{src:"192.168.2.33",dst:"yt",dn:"YouTube",want:"w2"},{src:"192.168.1.50",dst:"api",dn:"API đối tác",want:"w1"},{src:"192.168.1.20",dst:"yt",dn:"YouTube",want:"s"}];
+let order=["A","B","C","D"],ran=false;
+const outTag=o=>`<span class="tag ${o==="s"||o==="w2"?"wt2":"wt1"}">${OUT[o]}</span>`;
+const match=p=>order.find(k=>RULES[k].m(p));
+function renderA(){
+  const hits=ran?new Set(PK.map(match)):new Set(),prev=[...document.querySelectorAll("#pkRows select")].map(s=>s.value);
+  $("rlist").innerHTML=order.map((k,i)=>`<div class="rrow ${hits.has(k)?"hit":""}"><span class="id">${k}</span><span>${RULES[k].t}<br>${outTag(RULES[k].out)}</span><span class="mv"><button type="button" data-up="${i}" aria-label="Đưa rule ${k} lên" ${i===0?"disabled":""}>↑</button><button type="button" data-dn="${i}" aria-label="Đưa rule ${k} xuống" ${i===order.length-1?"disabled":""}>↓</button></span></div>`).join("");
+  $("pkRows").innerHTML=PK.map((p,i)=>{const k=match(p),got=RULES[k].out,g=prev[i]||"";
+    const res=ran?`${outTag(got)}<br><small class="muted">khớp rule ${k}</small> ${got===p.want?'<span class="tag tok">đúng ý đồ</span>':'<span class="tag tbad">sai ý đồ</span>'}${g?(g===got?' <span class="tag tok">bạn đoán đúng</span>':' <span class="tag tn">bạn đoán khác</span>'):""}`:'<span class="muted">—</span>';
+    return `<tr><td><span class="mono">${p.src}</span><br><small class="muted">→ ${p.dn}</small></td><td><select id="g${i}" aria-label="Dự đoán cho gói ${i+1}"><option value="">Chọn…</option>${Object.entries(OUT).map(([v,t])=>`<option value="${v}" ${g===v?"selected":""}>${t}</option>`).join("")}</select></td><td>${res}</td></tr>`}).join("");
+  const good=PK.filter(p=>RULES[match(p)].out===p.want).length;
+  $("aScore").textContent=ran?`${good}/4 đúng ý đồ`:"Chưa chạy";$("aScore").className="tag "+(ran?(good===4?"tok":"twarn"):"tn");
+  $("aHint").textContent=!ran?"Chọn dự đoán cho từng gói tin rồi bấm Chạy gói tin.":good===4?"Chính xác. Rule cụ thể nằm trên, rule tổng quát A nằm cuối. Đây là nguyên tắc sắp xếp Priority.":order[0]==="A"?"Rule A khớp mọi traffic nên đang nuốt hết các gói. Đưa A xuống cuối rồi chạy lại.":"Gần đúng. Rule nào cụ thể hơn thì phải nằm trên.";
+}
+$("rlist").addEventListener("click",e=>{const u=e.target.closest("[data-up]"),d=e.target.closest("[data-dn]");
+  if(u){const i=+u.dataset.up;[order[i-1],order[i]]=[order[i],order[i-1]]}else if(d){const i=+d.dataset.dn;[order[i+1],order[i]]=[order[i],order[i+1]]}else return;renderA()});
+$("aRun").onclick=()=>{ran=true;renderA()};
+$("aReset").onclick=()=>{order=["A","B","C","D"];ran=false;document.querySelectorAll("#pkRows select").forEach(s=>s.value="");renderA()};
+const OPTS=["IP-Based","Session-Based","Ghim một WAN","Không cấu hình nào giúp được"];
+const Q=[
+  {c:"Phòng kế toán vào cổng thuế điện tử bị đăng xuất liên tục từ khi bật cân bằng tải.",a:0,e:"Cổng thuế kiểm tra IP theo phiên. IP-Based giữ mỗi máy trên một WAN nên Public IP không đổi."},
+  {c:"Phòng dựng phim tải file 40 GB lên Google Drive bằng ứng dụng đa luồng, muốn nhanh nhất.",a:1,e:"Ứng dụng mở nhiều session song song. Session-Based trải chúng ra nhiều WAN nên tốc độ tiệm cận tổng băng thông."},
+  {c:"API của đối tác chỉ chấp nhận kết nối từ 203.0.113.10, là IP tĩnh của WAN1.",a:2,e:"Ghim rule vào WAN1. Nếu đối tác chưa whitelist IP khác, nên tắt Failover để không gửi request từ IP lạ."},
+  {c:"Khách ngồi chờ xem YouTube qua Wi-Fi làm nhân viên bị chậm.",a:2,e:"Tạo rule theo subnet Wi-Fi khách và ghim vào WAN phụ. Nhân viên giữ trọn WAN chính."},
+  {c:"Họp Zoom bị đứng hình vài giây một lần sau khi đổi sang chia theo session.",a:0,e:"Họp trực tuyến cần đường đi ổn định. IP-Based giữ mỗi máy trên một WAN suốt cuộc họp."},
+  {c:"50 máy cùng tải bản cập nhật Windows vào sáng thứ Hai.",a:1,e:"Nhiều máy, nhiều session, không nhạy đổi IP. Session-Based tận dụng cả hai WAN."},
+  {c:"Tải một file ISO 5 GB bằng trình duyệt (một kết nối), muốn nhanh gấp đôi nhờ có hai WAN.",a:3,e:"Một kết nối chỉ đi trên một WAN. Không mode nào cộng băng thông cho một luồng đơn. Cần trình tải đa luồng."},
+  {c:"SSH vào server nước ngoài có whitelist IP. Đối tác đã whitelist cả hai IP của văn phòng.",a:0,e:"Cả hai IP đều hợp lệ nên vẫn chia tải được, nhưng SSH là phiên dài: IP-Based giữ ổn định mà vẫn có dự phòng tự nhiên của pool."}
+];
+let qi=0,qs=0,qa=null;
+function renderQ(){
+  const best=store.get("pr.best");$("qBar").style.width=qi/Q.length*100+"%";
+  $("qScore").textContent=`Điểm ${qs}/${Q.length}`+(best!=null?` · cao nhất ${best}`:"");
+  if(qi>=Q.length){if(best==null||qs>best)store.set("pr.best",qs);
+    $("qBody").innerHTML=`<p class="qcase">Hoàn thành: ${qs}/${Q.length} câu đúng.</p><p class="muted">${qs===Q.length?"Bạn đã nắm chắc cách chọn Mode.":qs>=6?"Rất tốt. Xem lại giải thích của các câu sai.":"Xem lại trang Hiểu cơ chế rồi thử lần nữa."}</p><div class="row"><button type="button" class="btn primary" id="qAgain">Làm lại</button></div>`;
+    $("qAgain").onclick=()=>{qi=0;qs=0;qa=null;renderQ()};return}
+  const q=Q[qi];
+  $("qBody").innerHTML=`<span class="eyebrow">Câu ${qi+1}/${Q.length}</span><p class="qcase">${q.c}</p><div class="qopts">${OPTS.map((o,j)=>`<button type="button" class="qopt ${qa!=null?(j===q.a?"right":j===qa?"wrong":""):""}" data-a="${j}" ${qa!=null?"disabled":""}>${o}</button>`).join("")}</div>${qa!=null?`<div class="qfb ${qa===q.a?"ok":"no"}"><b>${qa===q.a?"Đúng.":"Chưa đúng."}</b> ${q.e}</div><div class="row"><button type="button" class="btn primary" id="qNext">${qi===Q.length-1?"Xem kết quả":"Câu tiếp →"}</button></div>`:""}`;
+  if(qa!=null)$("qNext").onclick=()=>{qi++;qa=null;renderQ()};
+}
+$("qBody").addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(!b||qa!=null)return;qa=+b.dataset.a;if(qa===Q[qi].a)qs++;renderQ()});
+
+/* ================= 5. troubleshooting ================= */
+const TS=[
+  {k:"Source",d:"Máy nào, IP nào, thuộc nhóm nào?",q:["Máy dùng IP tĩnh hay DHCP? IP có nằm trong Object của rule không?","Máy có đang dùng VPN client hoặc proxy làm đổi đường đi không?"]},
+  {k:"Destination",d:"Đi tới đâu: domain, IP, quốc gia?",q:["Domain có phân giải ra nhiều IP hoặc CDN khác nhau không?","Dịch vụ dùng cổng và giao thức nào?"]},
+  {k:"Priority",d:"Rule nào được xét trước?",q:["Có rule tổng quát nào nằm trên rule cụ thể không?","Firewall có xử lý traffic này trước Policy Route không?"]},
+  {k:"Policy",d:"Traffic có thực sự khớp rule?",q:["Dùng Diagnose của Route Policy với đúng nguồn và đích.","Kiểm tra rule đang bật và Object đúng."]},
+  {k:"WAN Pool",d:"Rule cho phép những WAN nào?",q:["Pool có WAN nào đang rớt hoặc không ở chế độ Always On?","Pool có đúng ý đồ thiết kế không?"]},
+  {k:"Mode",d:"IP-Based hay Session-Based?",q:["Dịch vụ có nhạy với đổi Public IP không?","Có cần tận dụng nhiều WAN cho dịch vụ này không?"]},
+  {k:"Actual WAN",d:"Thực tế traffic ra WAN nào?",q:["Xem bảng Session trên router cho IP nguồn đó.","Mở trang kiểm tra IP công cộng từ chính máy đó."]},
+  {k:"Failover",d:"Chuyện gì xảy ra khi WAN rớt?",q:["Rule có Failover sang WAN khác không? Đối tác có chấp nhận IP đó?","Failback có đang cắt session khi WAN chính phục hồi?"]}
+];
+function tsRender(i){
+  $("tsSteps").innerHTML=TS.map((s,j)=>`<button type="button" data-i="${j}" ${i===j?'aria-current="step"':""}><b>${String(j+1).padStart(2,"0")} · ${s.k}</b><span>${s.d}</span></button>`).join("");
+  const s=TS[i];
+  $("tsPanel").innerHTML=`<div class="eyebrow">Bước ${i+1}/${TS.length}</div><h3 style="font-size:1.2rem">${s.k}</h3><p class="muted">${s.d}</p><ul>${s.q.map(x=>`<li>${x}</li>`).join("")}</ul><div class="row"><button type="button" class="btn" id="tsPrev" ${i===0?"disabled":""}>← Trước</button><button type="button" class="btn primary" id="tsNext" ${i===TS.length-1?"disabled":""}>Bước tiếp →</button></div>`;
+  $("tsPrev").onclick=()=>tsRender(i-1);$("tsNext").onclick=()=>tsRender(i+1);
+}
+$("tsSteps").addEventListener("click",e=>{const b=e.target.closest("button");if(b)tsRender(+b.dataset.i)});
+
+/* ================= reactions + notes (shared db) ================= */
+const RX=[["clear","Dễ hiểu"],["useful","Hữu ích"],["more","Cần giải thích thêm"]];
+let DB=null,ME=null,mine={r:{},note:""},all=[],canWrite=true,dbMsg="Đang kết nối…";
+function renderReact(){
+  document.querySelectorAll(".react").forEach(el=>{
+    const sec=el.dataset.sec,cnt={};RX.forEach(([k])=>cnt[k]=all.filter(d=>d.r&&d.r[sec]===k).length);
+    const on=!!DB&&canWrite,open=el.querySelector("details")?.open;
+    el.innerHTML=`<div class="row"><span>Trang này với bạn thế nào?</span>${RX.map(([k,l])=>`<button type="button" class="rb" data-sec="${sec}" data-rx="${k}" aria-pressed="${mine.r[sec]===k}" ${on?"":"disabled"}>${l}${DB?` <b>${cnt[k]}</b>`:""}</button>`).join("")}${on?"":`<small>${dbMsg}</small>`}</div>
+    ${on?`<details ${open?"open":""}><summary>Viết góp ý</summary><div style="display:grid;gap:8px;margin-top:8px"><textarea rows="3" maxlength="300" id="note_${sec}" aria-label="Góp ý" placeholder="Bạn muốn trang này có thêm gì?">${esc(mine.note)}</textarea><div class="row"><button type="button" class="btn sm primary" data-save="${sec}">Gửi góp ý</button><span class="toast" role="status"></span></div><small>Góp ý hiển thị ẩn danh ở trang chủ. Mỗi người một góp ý, gửi lại sẽ thay góp ý cũ.</small></div></details>`:""}`;
+  });
+}
+function renderNotes(){
+  const list=all.filter(d=>typeof d.note==="string"&&d.note.trim()).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,6),box=$("notes");
+  box.innerHTML="";if(!list.length){box.innerHTML='<p class="muted">Chưa có góp ý nào. Bạn có thể gửi góp ý ở cuối bất kỳ trang nào.</p>';return}
+  list.forEach(d=>{const n=document.createElement("div");n.className="note";const p=document.createElement("p");p.textContent=d.note.slice(0,300);const s=document.createElement("small");s.textContent=(d.mine?"Bạn · ":"Một người dùng · ")+(d.ts?new Date(d.ts).toLocaleDateString("vi-VN"):"");n.append(p,s);box.append(n)});
+}
+async function writeMine(){
+  try{await DB.doc("reactions/"+ME).set({r:mine.r,note:mine.note,ts:Date.now()});return true}
+  catch(e){canWrite=false;dbMsg="Bạn chỉ có quyền xem nên chưa thể gửi.";renderReact();return false}
+}
+document.addEventListener("click",async e=>{
+  const b=e.target.closest(".rb");
+  if(b&&DB&&canWrite){const sec=b.dataset.sec,k=b.dataset.rx;if(mine.r[sec]===k)delete mine.r[sec];else mine.r[sec]=k;renderReact();await writeMine();return}
+  const sv=e.target.closest("[data-save]");
+  if(sv&&DB&&canWrite){const ta=$("note_"+sv.dataset.save);mine.note=ta.value.trim().slice(0,300);sv.disabled=true;
+    const ok=await writeMine();const t=sv.parentElement.querySelector(".toast");if(ok&&t)t.textContent=mine.note?"Đã gửi góp ý.":"Đã xoá góp ý.";sv.disabled=false}
+});
+renderReact();
+(async()=>{
+  const c=window.claude;const [db,user]=await Promise.all([c?.use?c.use("db"):null,c?.use?c.use("user"):null]);
+  if(!db||!user){dbMsg="Đăng nhập claude.ai để bày tỏ cảm nhận.";renderReact();return}
+  ME=await user.id();if(!ME){dbMsg="Đăng nhập claude.ai để bày tỏ cảm nhận.";renderReact();return}
+  if(await user.can("data.write")===false){canWrite=false;dbMsg="Bạn chỉ có quyền xem nên chưa thể gửi."}
+  DB=db;renderReact();
+  db.collection("reactions").onSnapshot(snap=>{
+    all=snap.docs.map(d=>({...d.data(),mine:d.id===ME}));
+    const m=snap.docs.find(d=>d.id===ME);if(m){const v=m.data();mine={r:{...(v.r||{})},note:v.note||""}}
+    if(!document.activeElement?.id?.startsWith("note_"))renderReact();renderNotes();
+  },()=>{dbMsg="Không tải được phản hồi lúc này.";DB=null;renderReact()});
+})();
+
+/* ================= boot ================= */
+renderWizard();mxRender(1);renderA();renderQ();tsRender(0);route();
+})();
+</script>
+
+</body></html>
